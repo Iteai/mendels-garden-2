@@ -7,10 +7,10 @@ A plant breeding simulation game built with Expo, React Native, and Zustand.
 | Phase | Name               | Status      |
 |-------|--------------------|-------------|
 | 1     | Foundation         | ✅ Complete  |
-| 2     | Genetics Core      | 🔲 Next      |
-| 3     | SVG Plant Rendering| 🔲 Planned   |
-| 4     | Growth Simulation  | 🔲 Planned   |
-| 5     | Game Loop          | 🔲 Planned   |
+| 2     | Genetics Core      | ✅ Complete  |
+| 3     | SVG Plant Rendering| ✅ Complete  |
+| 4     | Growth Simulation  | ✅ Complete  |
+| 5     | Game Loop          | 🔲 Next      |
 | 6     | Content Expansion  | 🔲 Planned   |
 | 7     | UI Improvement     | 🔲 Planned   |
 | 8     | Persistence        | 🔲 Planned   |
@@ -102,11 +102,3 @@ npx expo start
 Configure with `eas.json` in a future phase. The managed workflow requires no native setup.
 
 ---
-
-## What's Next: Phase 2 — Genetics Core
-
-- `Genotype` → `Phenotype` mapping engine
-- Dominant / recessive allele resolution
-- Mutation system with bounded randomness
-- 2-parent hybrid generation
-- Species trait distributions for Tomato
