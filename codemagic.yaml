@@ -42,13 +42,11 @@ workflows:
 
       - name: Fix MainActivity for gesture handler
         script: |
-          # Assicura che MainActivity.kt abbia il supporto per gesture handler
           MAIN_ACTIVITY="android/app/src/main/java/com/plantgenetics/app/MainActivity.kt"
           if [ -f "$MAIN_ACTIVITY" ]; then
-            # Verifica se contiene già il fix
             if ! grep -q "RNGestureHandlerEnabledRootView" "$MAIN_ACTIVITY"; then
-              # Aggiungi l'import
-              sed -i '1s/^/import com.swmansion.gesturehandler.react.RNGestureHandlerEnabledRootView\n/' "$MAIN_ACTIVITY"
+              # Aggiungi l'import DOPO la riga che inizia con "package"
+              sed -i '/^package /a\import com.swmansion.gesturehandler.react.RNGestureHandlerEnabledRootView' "$MAIN_ACTIVITY"
             fi
           fi
 
