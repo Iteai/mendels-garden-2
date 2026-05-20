@@ -30,9 +30,9 @@ workflows:
           npm cache clean --force
           npm install --legacy-peer-deps
 
-      - name: Check Expo dependencies
+      - name: Fix Expo dependencies
         script: |
-          npx expo-doctor || true
+          npx expo install --fix
 
       - name: Prebuild Android
         script: |
@@ -45,6 +45,7 @@ workflows:
 
       - name: Build APK
         script: |
+          export NODE_ENV=production
           cd android
           chmod +x ./gradlew
           ./gradlew clean
@@ -52,6 +53,7 @@ workflows:
 
       - name: Build AAB
         script: |
+          export NODE_ENV=production
           cd android
           chmod +x ./gradlew
           ./gradlew bundleRelease
