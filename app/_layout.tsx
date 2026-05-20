@@ -121,7 +121,7 @@ function AppInitialiser() {
 
             if (processedTicks < elapsedTicks) {
               // Schedule next chunk on next event loop iteration
-              setImmediate(processChunk);
+              setTimeout(processChunk, 10);
             }
           }
         };
