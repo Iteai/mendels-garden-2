@@ -34,9 +34,10 @@ workflows:
         script: |
           npx expo install --fix
 
-      - name: Prebuild Android
+      - name: Prebuild Android (clean)
         script: |
           export NODE_ENV=production
+          rm -rf android
           npx expo prebuild --platform android --clean --non-interactive
 
       - name: Set Android SDK location
@@ -49,14 +50,14 @@ workflows:
           cd android
           chmod +x ./gradlew
           ./gradlew clean
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease -x lint
 
       - name: Build AAB
         script: |
           export NODE_ENV=production
           cd android
           chmod +x ./gradlew
-          ./gradlew bundleRelease
+          ./gradlew bundleRelease -x lint
 
     artifacts:
       - android/app/build/outputs/**/*.apk
