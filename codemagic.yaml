@@ -30,16 +30,13 @@ workflows:
           npm cache clean --force
           npm install --legacy-peer-deps
 
-      - name: Fix AJV dependency mismatch
-        script: |
-          npm install --save-dev ajv@^8.17.1 ajv-keywords@^5.1.0 --legacy-peer-deps
-
       - name: Check Expo dependencies
         script: |
           npx expo-doctor || true
 
       - name: Prebuild Android
         script: |
+          export NODE_ENV=production
           npx expo prebuild --platform android --clean --non-interactive
 
       - name: Set Android SDK location
