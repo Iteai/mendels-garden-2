@@ -40,6 +40,18 @@ workflows:
           rm -rf android
           npx expo prebuild --platform android --clean --non-interactive
 
+      - name: Fix MainActivity for gesture handler
+        script: |
+          # Assicura che MainActivity.kt abbia il supporto per gesture handler
+          MAIN_ACTIVITY="android/app/src/main/java/com/plantgenetics/app/MainActivity.kt"
+          if [ -f "$MAIN_ACTIVITY" ]; then
+            # Verifica se contiene già il fix
+            if ! grep -q "RNGestureHandlerEnabledRootView" "$MAIN_ACTIVITY"; then
+              # Aggiungi l'import
+              sed -i '1s/^/import com.swmansion.gesturehandler.react.RNGestureHandlerEnabledRootView\n/' "$MAIN_ACTIVITY"
+            fi
+          fi
+
       - name: Set Android SDK location
         script: |
           echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
