@@ -98,10 +98,15 @@ export default function TabLayout() {
           tabBarStyle: {
             backgroundColor: '#0B1408',
             borderTopColor: '#26311F',
+            borderTopWidth: 1,
+            paddingBottom: 5,
+            paddingTop: 5,
+            height: 65, // Aumenta l'area cliccabile
           },
           tabBarLabelStyle: {
-            fontSize: 11,
+            fontSize: 12,
             fontWeight: '600',
+            marginBottom: 5,
           },
         }}
       >
