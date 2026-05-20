@@ -21,7 +21,6 @@ workflows:
         # - KEYSTORE_KEY_ALIAS (for production signing)
         # - KEYSTORE_PASSWORD
         - plantgenetics-credentials
-      flutter: inactive
       node: 18
       npm: 9
 
@@ -47,8 +46,7 @@ workflows:
           eas build \
             --platform android \
             --profile preview \
-            --local \
-            --output $CM_BUILD_DIR/app-debug.apk
+            --non-interactive
 
       # ── Build Android AAB (release, if signed)
       - name: Build Android release AAB
@@ -56,8 +54,7 @@ workflows:
           eas build \
             --platform android \
             --profile production \
-            --local \
-            --output $CM_BUILD_DIR/app-release.aab || true
+            --non-interactive
 
       - name: Download missing assets
         script: |
