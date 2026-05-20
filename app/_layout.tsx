@@ -5,7 +5,7 @@ import 'react-native-gesture-handler';
 // ─────────────────────────────────────────────
 
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -175,10 +175,20 @@ export default function RootLayout() {
           screenOptions={{
             headerShown: false,
             contentStyle: { backgroundColor: COLORS.bg_primary },
-            animation: 'fade',
+            // FIX: On Android, 'fade' animation blocks tab bar gesture recognition
+            // Use 'default' or 'simple_push' which don't interfere with nested navigation
+            animation: Platform.OS === 'android' ? 'default' : 'fade',
+            gestureEnabled: true,
           }}
         >
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen 
+            name="(tabs)" 
+            options={{ 
+              headerShown: false,
+              // Ensure Tabs navigation gets full gesture priority
+              gestureEnabled: true,
+            }} 
+          />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>
