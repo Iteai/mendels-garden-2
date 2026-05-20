@@ -26,29 +26,16 @@ workflows:
       - name: Install dependencies
         script: |
           rm -rf node_modules
-          rm -f package-lock.json
-          npm cache clean --force
           npm install --legacy-peer-deps
 
       - name: Fix Expo dependencies
         script: |
           npx expo install --fix
 
-      - name: Prebuild Android (clean)
+      - name: Prebuild Android
         script: |
           export NODE_ENV=production
-          rm -rf android
           npx expo prebuild --platform android --clean --non-interactive
-
-      - name: Fix MainActivity for gesture handler
-        script: |
-          MAIN_ACTIVITY="android/app/src/main/java/com/plantgenetics/app/MainActivity.kt"
-          if [ -f "$MAIN_ACTIVITY" ]; then
-            if ! grep -q "RNGestureHandlerEnabledRootView" "$MAIN_ACTIVITY"; then
-              # Aggiungi l'import DOPO la riga che inizia con "package"
-              sed -i '/^package /a\import com.swmansion.gesturehandler.react.RNGestureHandlerEnabledRootView' "$MAIN_ACTIVITY"
-            fi
-          fi
 
       - name: Set Android SDK location
         script: |
