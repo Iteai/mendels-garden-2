@@ -9,6 +9,7 @@
 //   - Compute offspring phenotype and rarity
 //   - Produce SeedItem records ready for inventory
 //   - Generate starter seed sets for new players
+//   - Cross-species breeding (Cayenne × Daikon = hybrid!)
 // ─────────────────────────────────────────────
 
 import type {
@@ -17,22 +18,17 @@ import type {
   AlleleValue,
   SeedItem,
   SpeciesId,
+  VarietyId,
 } from '../types';
 import { ALL_GENE_KEYS } from './genes';
 import {
   createWildTypeGenotype,
   computePhenotype,
+  computeHybridPhenotype,
   applyMutation,
 } from './genotype';
-import { computeRarityLabel } from './rarity';
-import type { RarityLabel } from './rarity';
-
-// ─── Local rarity helper — maps score to SeedItem rarity type ──
-// This duplicates computeRarity from inventoryStore to break the
-// circular dependency: genetics → store → genetics.
-function computeRarity(rarityScore: number): 'common' | 'uncommon' | 'rare' | 'legendary' {
-  return computeRarityLabel(rarityScore);
-}
+import { computeRarity } from '../store/inventoryStore';
+import { getDefaultVariety, getVariety, VARIETY_REGISTRY } from './varieties';
 
 // ─── Mendelian Segregation ────────────────────
 
@@ -63,8 +59,7 @@ export type CrossResult = {
  * Cross two parent genotypes, then apply per-gene mutation.
  *
  * For genes present in both parents, standard Mendelian segregation applies.
- * For genes in only one parent (e.g. different species), that parent's
- * allele is duplicated (creates a homozygous pair).
+ * For genes in only one parent, that parent's allele is duplicated.
  * Genes absent in both parents are omitted from offspring.
  *
  * @param genotypeA      Parent A genotype
@@ -113,6 +108,55 @@ export function crossGenotypes(
   return { genotype: mutated, mutationsOccurred };
 }
 
+// ─── Cross-species: Determine offspring species ─
+
+/**
+ * When crossing two different species, determine the offspring species.
+ * Uses a weighted random based on VIGOR expression (whichever parent has
+ * more dominant VIGOR alleles is more likely to dominate the hybrid).
+ * If both are equal, 50/50.
+ */
+function determineHybridSpecies(
+  genotypeA: Genotype,
+  genotypeB: Genotype,
+  speciesIdA: SpeciesId,
+  speciesIdB: SpeciesId,
+): SpeciesId {
+  // Count dominant VIGOR alleles for each parent
+  const vigorA = genotypeA['VIGOR']?.filter((a) => a === 'D').length ?? 1;
+  const vigorB = genotypeB['VIGOR']?.filter((a) => a === 'D').length ?? 1;
+  const total = vigorA + vigorB;
+
+  // Weighted probability
+  const roll = Math.random();
+  if (roll < vigorA / total) return speciesIdA;
+  return speciesIdB;
+}
+
+/**
+ * Determine the variety for a hybrid offspring.
+ * Combines variety names from both parents.
+ */
+function determineHybridVariety(
+  varietyIdA: VarietyId,
+  varietyIdB: VarietyId,
+  offspringSpecies: SpeciesId,
+): VarietyId {
+  // For same-species breeding: use parent A's variety
+  const variA = VARIETY_REGISTRY[varietyIdA];
+  const variB = VARIETY_REGISTRY[varietyIdB];
+  if (!variA || !variB) return getDefaultVariety(offspringSpecies);
+
+  // If the offspring species matches parent A, use A's variety
+  if (variA.speciesId === offspringSpecies) return varietyIdA;
+  // If matches parent B, use B's variety
+  if (variB.speciesId === offspringSpecies) return varietyIdB;
+
+  // Cross-species hybrid: use a blend label
+  // Use the default variety of the offspring species
+  return getDefaultVariety(offspringSpecies);
+}
+
 // ─── Seed Generation ─────────────────────────
 
 /**
@@ -136,11 +180,11 @@ export type BreedResult = {
  * Breed two seed items and produce offspring seeds.
  *
  * Rules:
- * - Species is inherited from parent A (same-species required for now)
+ * - Same-species breeding: species and variety from parent A
+ * - Cross-species breeding: offspring species determined by VIGOR dominance,
+ *   phenotype is a blend of both parent species basePhenotypes
  * - Each offspring is an independent cross (not clones)
  * - Generation = max(parentA.generation, parentB.generation) + 1
- *
- * Cross-species breeding is blocked at the UI layer in Phase 5.
  */
 export function breedSeeds(params: BreedParams): BreedResult {
   const {
@@ -153,6 +197,8 @@ export function breedSeeds(params: BreedParams): BreedResult {
   const seeds: BreedResult['seeds'] = [];
   let totalMutations = 0;
 
+  const isCrossSpecies = parentA.speciesId !== parentB.speciesId;
+
   for (let i = 0; i < offspringCount; i++) {
     const { genotype, mutationsOccurred } = crossGenotypes(
       parentA.genotype,
@@ -162,14 +208,42 @@ export function breedSeeds(params: BreedParams): BreedResult {
 
     totalMutations += mutationsOccurred;
 
-    const speciesId = parentA.speciesId; // species from parent A
-    const phenotype = computePhenotype(genotype, speciesId);
+    // Determine offspring species and variety
+    let speciesId: SpeciesId;
+    let varietyId: VarietyId;
+
+    if (isCrossSpecies) {
+      // Cross-species: blend!
+      speciesId = determineHybridSpecies(
+        parentA.genotype, parentB.genotype,
+        parentA.speciesId, parentB.speciesId,
+      );
+      varietyId = determineHybridVariety(
+        parentA.varietyId, parentB.varietyId,
+        speciesId,
+      );
+    } else {
+      speciesId = parentA.speciesId;
+      varietyId = parentA.varietyId;
+    }
+
+    // Compute phenotype
+    const phenotype = isCrossSpecies
+      ? computeHybridPhenotype(genotype, parentA.speciesId, parentB.speciesId)
+      : computePhenotype(genotype, speciesId, varietyId);
+
+    // Cross-species hybrids get a bonus to rarity (unusual = valuable)
+    const hybridRarityBoost = isCrossSpecies ? 0.1 : 0;
 
     seeds.push({
       speciesId,
+      varietyId,
       genotype,
-      phenotype,
-      rarity: computeRarity(phenotype.rarityScore),
+      phenotype: {
+        ...phenotype,
+        rarityScore: Math.min(1, phenotype.rarityScore + hybridRarityBoost),
+      },
+      rarity: computeRarity(phenotype.rarityScore + hybridRarityBoost),
       quantity: 1,
       parentIds: [parentA.id, parentB.id],
       generation: Math.max(parentA.generation, parentB.generation) + 1,
@@ -182,18 +256,21 @@ export function breedSeeds(params: BreedParams): BreedResult {
 // ─── Wild Seed Creation ───────────────────────
 
 /**
- * Create a single wild-type seed for a species.
+ * Create a single wild-type seed for a species/variety.
  * Used for starting inventory and shop stock.
  */
 export function createWildSeed(
   speciesId: SpeciesId,
   quantity = 1,
+  varietyId?: VarietyId,
 ): Omit<SeedItem, 'id' | 'obtainedAt'> {
-  const genotype = createWildTypeGenotype(speciesId);
-  const phenotype = computePhenotype(genotype, speciesId);
+  const vid = varietyId ?? getDefaultVariety(speciesId);
+  const genotype = createWildTypeGenotype(speciesId, vid);
+  const phenotype = computePhenotype(genotype, speciesId, vid);
 
   return {
     speciesId,
+    varietyId: vid,
     genotype,
     phenotype,
     rarity: computeRarity(phenotype.rarityScore),
@@ -204,32 +281,39 @@ export function createWildSeed(
 }
 
 // ─── Starter Seed Pack ────────────────────────
+// Gives the player a diverse starting selection:
+//   1x Cherry tomato, 1x Beefsteak tomato, 1x Genovese basil,
+//   1x Cherry Belle radish, 1x Cayenne chili
+// Plus a mutated variant of the first tomato.
 
-/**
- * Generate the player's starter inventory.
- * 3 tomato seeds with varied genotypes — all gen-0 wild-type.
- * One of the three has a slightly elevated mutation run applied
- * to create a touch of variation from the start.
- */
 export function generateStarterSeeds(): Array<Omit<SeedItem, 'id' | 'obtainedAt'>> {
   const seeds: Array<Omit<SeedItem, 'id' | 'obtainedAt'>> = [];
 
-  // Seed 1 — standard wild-type tomato
-  seeds.push(createWildSeed('tomato', 2));
+  // Seed 1 — Cherry tomato (prolific, easy starter)
+  seeds.push(createWildSeed('tomato', 2, 'tomato_cherry'));
 
-  // Seed 2 — another wild-type, different random draw
-  seeds.push(createWildSeed('tomato', 2));
+  // Seed 2 — Beefsteak tomato (large fruit, different experience)
+  seeds.push(createWildSeed('tomato', 2, 'tomato_beefsteak'));
 
-  // Seed 3 — slightly mutated variant (0.5× extra mutation pass)
+  // Seed 3 — Genovese basil (fast-growing aromatic)
+  seeds.push(createWildSeed('basil', 1, 'basil_genovese'));
+
+  // Seed 4 — Cayenne chili (heat-lover's starter)
+  seeds.push(createWildSeed('chili', 1, 'chili_cayenne'));
+
+  // Seed 5 — Cherry Belle radish (fast-cycling, quick rewards)
+  seeds.push(createWildSeed('radish', 1, 'radish_cherry_belle'));
+
+  // Seed 6 — slightly mutated variant of Cherry tomato
   // This gives the player at least one interesting starting specimen
   const variantGenotype = applyMutation(
-    createWildTypeGenotype('tomato'),
+    createWildTypeGenotype('tomato', 'tomato_cherry'),
     2.5, // higher rate for this one seed only
   );
-  const variantPhenotype = computePhenotype(variantGenotype, 'tomato');
-
+  const variantPhenotype = computePhenotype(variantGenotype, 'tomato', 'tomato_cherry');
   seeds.push({
     speciesId: 'tomato',
+    varietyId: 'tomato_cherry',
     genotype: variantGenotype,
     phenotype: variantPhenotype,
     rarity: computeRarity(variantPhenotype.rarityScore),
@@ -260,12 +344,16 @@ export function previewBreed(
   parentB: SeedItem,
   samples = 20,
 ): PhenotypePreview[] {
-  const speciesId = parentA.speciesId;
+  const isCrossSpecies = parentA.speciesId !== parentB.speciesId;
+
   const traitSamples: Record<string, number[]> = {};
 
   for (let i = 0; i < samples; i++) {
     const { genotype } = crossGenotypes(parentA.genotype, parentB.genotype);
-    const ph = computePhenotype(genotype, speciesId);
+
+    const ph = isCrossSpecies
+      ? computeHybridPhenotype(genotype, parentA.speciesId, parentB.speciesId)
+      : computePhenotype(genotype, parentA.speciesId, parentA.varietyId);
 
     for (const [key, val] of Object.entries(ph)) {
       if (key === 'rarityScore') continue;

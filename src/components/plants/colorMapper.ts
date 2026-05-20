@@ -8,11 +8,66 @@
 //   secondaryColorShift(-1..1) → ±20° rotation on leaf/stem hue
 //   saturationBoost    (0..1)  → +0..40% saturation across all hues
 //   healthValue        (0..1)  → dims saturation when plant is stressed
+//
+// Phase 9: Added LRU cache for color palette computations
 // ─────────────────────────────────────────────
 
 import type { Phenotype } from '../../types';
 import type { SpeciesDefinition } from '../../genetics/species';
 import type { PlantColorPalette } from './types';
+
+// ─── Color Palette Cache (LRU) ────────────────
+// Phase 9: Reduces recomputation for plants with similar phenotypes
+
+interface CacheEntry {
+  key: string;
+  palette: PlantColorPalette;
+  timestamp: number;
+}
+
+const CACHE_SIZE = 100;
+const CACHE_TTL = 60000; // 60 seconds (cache ttl to avoid stale results)
+
+let colorPaletteCache: CacheEntry[] = [];
+
+function getCacheKey(speciesId: string, phenotypeKey: string, healthBucket: number): string {
+  return `${speciesId}:${phenotypeKey}:${healthBucket}`;
+}
+
+function getPhenotypeKey(phenotype: Phenotype): string {
+  // Create a simple hash of phenotype values (round to 2 decimals to group similar phenotypes)
+  return [
+    Math.round(phenotype.primaryColorShift * 100),
+    Math.round(phenotype.secondaryColorShift * 100),
+    Math.round(phenotype.saturationBoost * 100),
+  ].join(',');
+}
+
+function getFromCache(key: string): PlantColorPalette | null {
+  const entry = colorPaletteCache.find((e) => e.key === key);
+  if (entry && Date.now() - entry.timestamp < CACHE_TTL) {
+    return entry.palette;
+  }
+  if (entry) {
+    // Remove stale entry
+    colorPaletteCache = colorPaletteCache.filter((e) => e.key !== key);
+  }
+  return null;
+}
+
+function addToCache(key: string, palette: PlantColorPalette): void {
+  // Remove oldest entry if cache is full
+  if (colorPaletteCache.length >= CACHE_SIZE) {
+    colorPaletteCache = colorPaletteCache.slice(1);
+  }
+  colorPaletteCache.push({ key, palette, timestamp: Date.now() });
+}
+
+// ─── Clear cache on demand ────────────────────
+
+export function clearColorPaletteCache(): void {
+  colorPaletteCache = [];
+}
 
 /** Build a CSS HSL string, clamping all values to valid ranges */
 function hsl(h: number, s: number, l: number): string {
@@ -23,6 +78,30 @@ function hsl(h: number, s: number, l: number): string {
 }
 
 export function computeColorPalette(
+  phenotype: Phenotype,
+  species: SpeciesDefinition,
+  healthValue = 1.0,
+): PlantColorPalette {
+  // Phase 9: Check cache before computing
+  const healthBucket = Math.round(healthValue * 4);
+  const phenotypeKey = getPhenotypeKey(phenotype);
+  const cacheKey = getCacheKey(species.id, phenotypeKey, healthBucket);
+
+  const cached = getFromCache(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const palette = computeColorPaletteInternal(phenotype, species, healthValue);
+  addToCache(cacheKey, palette);
+  return palette;
+}
+
+/**
+ * Internal implementation of color palette computation.
+ * Separated from computeColorPalette to enable caching.
+ */
+function computeColorPaletteInternal(
   phenotype: Phenotype,
   species: SpeciesDefinition,
   healthValue = 1.0,

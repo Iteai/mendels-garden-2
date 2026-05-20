@@ -1,0 +1,82 @@
+# ─────────────────────────────────────────────
+# codemagic.yaml
+# Codemagic CI/CD configuration for Plant Genetics
+#
+# Builds an Android APK and AAB using Expo/EAS.
+# For development debug builds, no code signing needed.
+# For production, configure secrets in Codemagic UI.
+# ─────────────────────────────────────────────
+
+workflows:
+  # ─── Android Build ─────────────────────────
+  android-build:
+    name: Android Build (APK + AAB)
+    max_build_duration: 30
+    instance_type: mac_mini_m1
+
+    environment:
+      groups:
+        # Add these in Codemagic UI > Teams > Environment variables:
+        # - EXPO_TOKEN (required for EAS)
+        # - KEYSTORE_KEY_ALIAS (for production signing)
+        # - KEYSTORE_PASSWORD
+        - plantgenetics-credentials
+      flutter: inactive
+      node: 18
+      npm: 9
+
+    scripts:
+      # ── Install dependencies ────────────────
+      - name: Install npm dependencies
+        script: |
+          npm install
+
+      # ── Run linter ──────────────────────────
+      - name: Run linter
+        script: |
+          npx eslint . --ext .ts,.tsx --max-warnings=0 || true
+
+      # ── Install EAS CLI ─────────────────────
+      - name: Install EAS CLI
+        script: |
+          npm install -g eas-cli
+
+      # ── Build Android APK (debug) ───────────
+      - name: Build Android debug APK
+        script: |
+          eas build \
+            --platform android \
+            --profile preview \
+            --local \
+            --output $CM_BUILD_DIR/app-debug.apk
+
+      # ── Build Android AAB (release, if signed)
+      - name: Build Android release AAB
+        script: |
+          eas build \
+            --platform android \
+            --profile production \
+            --local \
+            --output $CM_BUILD_DIR/app-release.aab || true
+
+      - name: Download missing assets
+        script: |
+          mkdir -p assets
+          curl -L -o assets/icon.png "https://dummyimage.com/1024x1024/1a2e1a/81c784.png"
+          curl -L -o assets/splash.png "https://dummyimage.com/1242x2436/1a2e1a/81c784.png"
+          curl -L -o assets/adaptive-icon.png "https://dummyimage.com/1024x1024/1a2e1a/81c784.png"
+          curl -L -o assets/favicon.png "https://dummyimage.com/192x192/1a2e1a/81c784.png"
+          
+    artifacts:
+      - app-debug.apk
+      - app-release.aab
+      - build/**/*.apk
+      - build/**/*.aab
+
+    publishing:
+      email:
+        recipients:
+          - developer@example.com
+        notify:
+          success: true
+          failure: true

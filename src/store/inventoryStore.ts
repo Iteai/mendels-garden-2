@@ -1,7 +1,6 @@
 // ─────────────────────────────────────────────
 // src/store/inventoryStore.ts
-// Inventory state: seeds, harvests, currency, shop
-// Phase 5: Harvest + Shop with variety support
+// Inventory state: seeds, harvests, currency
 // ─────────────────────────────────────────────
 
 import { StateCreator } from 'zustand';
@@ -10,16 +9,16 @@ import type {
   SeedItem,
   HarvestItem,
   SeedRarity,
-  PlantInstance,
 } from '../types';
 import { GAME } from '../constants/theme';
-import { computeRarityLabel } from '../genetics/rarity';
-import { getVarietiesForSpecies, generateVarietySeed } from '../genetics/varieties';
 
 // ─── Rarity Computation ───────────────────────
 
 export function computeRarity(rarityScore: number): SeedRarity {
-  return computeRarityLabel(rarityScore) as SeedRarity;
+  if (rarityScore >= GAME.RARITY_LEGENDARY) return 'legendary';
+  if (rarityScore >= GAME.RARITY_RARE)      return 'rare';
+  if (rarityScore >= GAME.RARITY_UNCOMMON)  return 'uncommon';
+  return 'common';
 }
 
 // ─── ID helpers ───────────────────────────────
@@ -32,96 +31,6 @@ function generateHarvestId(): string {
   return `harvest_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
-// ─── Shop Item Types ──────────────────────────
-
-export type ConsumableType = 'water_pack' | 'nutrient_pack';
-
-export type ShopItem = {
-  id: string;
-  label: string;
-  description: string;
-  icon: string;
-  cost: number;
-  type: 'consumable' | 'wild_seed' | 'variety_seed';
-  /** For variety seeds, which variety id this maps to */
-  varietyId?: string;
-};
-
-/** Build the full shop item list dynamically from variety registry */
-export function buildShopItems(): ShopItem[] {
-  const items: ShopItem[] = [
-    // Consumables
-    {
-      id: 'water_pack',
-      label: 'Water Pack',
-      description: 'Fills 35% water to all plants',
-      icon: 'water-outline',
-      cost: 10,
-      type: 'consumable',
-    },
-    {
-      id: 'nutrient_pack',
-      label: 'Nutrient Pack',
-      description: 'Adds 30% nutrients to all plants',
-      icon: 'leaf-outline',
-      cost: 15,
-      type: 'consumable',
-    },
-  ];
-
-  // Variety seeds for all species
-  const speciesIds = ['tomato', 'chili', 'basil', 'radish'] as const;
-  const baseCosts: Record<string, number> = {
-    tomato: 20, chili: 25, basil: 20, radish: 15,
-  };
-
-  for (const speciesId of speciesIds) {
-    const varieties = getVarietiesForSpecies(speciesId);
-    for (const variety of varieties) {
-      const costMultiplier =
-        variety.rarityHint === 'legendary' ? 4 :
-        variety.rarityHint === 'rare' ? 2.5 :
-        variety.rarityHint === 'uncommon' ? 1.5 : 1;
-      const cost = Math.round((baseCosts[speciesId] ?? 20) * costMultiplier);
-
-      items.push({
-        id: `variety_${variety.id}`,
-        label: `${variety.displayName} ${speciesLabel(speciesId)}`,
-        description: variety.description,
-        icon: varietyIcon(variety.rarityHint),
-        cost,
-        type: 'variety_seed',
-        varietyId: variety.id,
-      });
-    }
-  }
-
-  return items;
-}
-
-function speciesLabel(id: string): string {
-  const map: Record<string, string> = { tomato: 'Tomato', chili: 'Chili', basil: 'Basil', radish: 'Radish' };
-  return map[id] ?? id;
-}
-
-function varietyIcon(rarity: string): string {
-  const map: Record<string, string> = {
-    common: 'leaf', uncommon: 'leaf', rare: 'star-outline', legendary: 'star',
-  };
-  return map[rarity] ?? 'leaf';
-}
-
-export const SHOP_ITEMS: ShopItem[] = buildShopItems();
-
-// ─── Harvest Result ───────────────────────────
-
-export type HarvestResult = {
-  harvestId: string;
-  seedIds: string[];
-  currencyEarned: number;
-  totalSeedsExtracted: number;
-};
-
 // ─── Slice Actions ────────────────────────────
 
 export type InventoryActions = {
@@ -131,14 +40,10 @@ export type InventoryActions = {
   removeHarvest: (harvestId: string) => void;
   addCurrency: (amount: number) => void;
   spendCurrency: (amount: number) => boolean;
+  /** Add a batch of seeds in one store write — avoids N individual writes */
   addSeedBatch: (seeds: Array<Omit<SeedItem, 'id' | 'obtainedAt'>>) => string[];
+  /** Populate the starting inventory on first launch */
   initStartingInventory: () => void;
-
-  // ── Phase 5: Game Loop Actions ──────────────
-  harvestPlant: (plant: PlantInstance) => HarvestResult;
-  buyWildSeed: (speciesId: string) => string | null;
-  buyVarietySeed: (varietyId: string) => string | null;
-  canAfford: (cost: number) => boolean;
 };
 
 // ─── Initial State ────────────────────────────
@@ -161,6 +66,8 @@ export const createInventorySlice: StateCreator<
 > = (set, get) => ({
   ...initialInventoryState,
 
+  // ── Single seed add ───────────────────────
+
   addSeed: (seedData) => {
     const id = generateSeedId();
     const seed: SeedItem = {
@@ -172,6 +79,8 @@ export const createInventorySlice: StateCreator<
     set((state) => ({ seeds: { ...state.seeds, [id]: seed } }));
     return id;
   },
+
+  // ── Batch seed add (single write) ─────────
 
   addSeedBatch: (seedDataArray) => {
     const now = Date.now();
@@ -193,6 +102,8 @@ export const createInventorySlice: StateCreator<
     return ids;
   },
 
+  // ── Remove seed ───────────────────────────
+
   removeSeed: (seedId, quantity = 1) => {
     set((state) => {
       const seed = state.seeds[seedId];
@@ -213,6 +124,8 @@ export const createInventorySlice: StateCreator<
     });
   },
 
+  // ── Harvests ──────────────────────────────
+
   addHarvest: (harvestData) => {
     const id = generateHarvestId();
     const harvest: HarvestItem = { ...harvestData, id, harvestedAt: Date.now() };
@@ -228,6 +141,8 @@ export const createInventorySlice: StateCreator<
     });
   },
 
+  // ── Currency ──────────────────────────────
+
   addCurrency: (amount) => {
     set((state) => ({ currency: state.currency + amount }));
   },
@@ -239,92 +154,14 @@ export const createInventorySlice: StateCreator<
     return true;
   },
 
-  canAfford: (cost) => get().currency >= cost,
+  // ── First-launch inventory ─────────────────
+  // Called once on first app open.
+  // Uses a lazy import to avoid circular dependency with the genetics module.
 
   initStartingInventory: () => {
+    // Lazy import avoids circular dep at module eval time
     const { generateStarterSeeds } = require('../genetics/hybridiser');
     const starters: Array<Omit<SeedItem, 'id' | 'obtainedAt'>> = generateStarterSeeds();
     get().addSeedBatch(starters);
   },
-
-  // ── Harvest Plant ─────────────────────────
-
-  harvestPlant: (plant) => {
-    const ph = plant.phenotype;
-    const qty = Math.max(1, Math.round(ph.yieldMultiplier * 3));
-    const harvestId = get().addHarvest({
-      speciesId: plant.speciesId,
-      plantId:   plant.id,
-      quantity:  qty,
-      quality:   plant.healthValue,
-    });
-
-    const baseSeeds = Math.random() < ph.seedViability ? 2 : 1;
-    const bonusSeed = Math.random() < (ph.seedViability - 0.5) * 2 ? 1 : 0;
-    const totalSeeds = Math.max(1, baseSeeds + bonusSeed);
-
-    const seedIds: string[] = [];
-    for (let i = 0; i < totalSeeds; i++) {
-      const sid = get().addSeed({
-        speciesId:  plant.speciesId,
-        genotype:   plant.genotype,
-        phenotype:  plant.phenotype,
-        rarity:     computeRarity(ph.rarityScore),
-        quantity:   1,
-        parentIds:  plant.parentIds,
-        generation: plant.generation,
-      });
-      seedIds.push(sid);
-    }
-
-    const baseCurrency = qty * 3;
-    const qualityBonus = Math.round(plant.healthValue * 5);
-    const currencyEarned = baseCurrency + qualityBonus;
-    get().addCurrency(currencyEarned);
-
-    return { harvestId, seedIds, currencyEarned, totalSeedsExtracted: totalSeeds };
-  },
-
-  // ── Shop ─────────────────────────────────
-
-  buyWildSeed: (speciesId) => {
-    const speciesCost = SHOP_ITEMS.find(
-      (item) => item.id === `wild_seed_${speciesId}`,
-    )?.cost ?? 20;
-
-    if (!get().spendCurrency(speciesCost)) return null;
-
-    const { createWildSeed } = require('../genetics/hybridiser');
-    const wildSeed = createWildSeed(speciesId, 1);
-    const id = get().addSeed(wildSeed);
-    return id;
-  },
-
-  buyVarietySeed: (varietyId) => {
-    const shopItem = SHOP_ITEMS.find((item) => item.varietyId === varietyId);
-    if (!shopItem || !get().spendCurrency(shopItem.cost)) return null;
-
-    const result = generateVarietySeed(varietyId);
-    if (!result) return null;
-
-    const id = get().addSeed({
-      speciesId:  getVarietyOrThrow(varietyId).speciesId,
-      genotype:   result.genotype,
-      phenotype:  result.phenotype,
-      rarity:     computeRarity(result.phenotype.rarityScore),
-      quantity:   1,
-      parentIds:  [null, null],
-      generation: 0,
-    });
-    return id;
-  },
 });
-
-// ─── Helper ────────────────────────────────────
-
-function getVarietyOrThrow(varietyId: string): { speciesId: string } {
-  const { getVariety } = require('../genetics/varieties');
-  const v = getVariety(varietyId);
-  if (!v) throw new Error(`Unknown variety: ${varietyId}`);
-  return v;
-}

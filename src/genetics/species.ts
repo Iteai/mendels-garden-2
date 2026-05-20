@@ -8,30 +8,14 @@
 //     (used when generating wild-type or starter seeds)
 //   - growthTicks: lifecycle stage durations
 //   - resourceNeeds: per-tick consumption
-//   - baseHue: HSL hue values for SVG rendering (Phase 3)
+//   - baseHue: HSL hue values for SVG rendering
+//   - varietyIds: which cultivars belong to this species
 //
-// Currently implemented: Tomato (full).
-// Chili, Basil, Radish are stubbed — expanded in Phase 6.
+// 4 species, each with 5 varieties defined in varieties.ts.
 // ─────────────────────────────────────────────
 
 import type { SpeciesDefinition } from '../types';
 import { ALL_GENE_KEYS } from './genes';
-
-// ─── Helpers ──────────────────────────────────
-
-/**
- * Build a complete allele frequency map.
- * Any gene not explicitly overridden defaults to 0.5 (50/50 D/R).
- */
-function makeAlleleFreqs(
-  overrides: Partial<Record<string, number>>,
-): Record<string, number> {
-  const result: Record<string, number> = {};
-  for (const key of ALL_GENE_KEYS) {
-    result[key] = overrides[key] ?? 0.5;
-  }
-  return result;
-}
 
 // ─── Species Definitions ──────────────────────
 
@@ -50,6 +34,8 @@ function makeAlleleFreqs(
  *  - VIGOR slightly D-biased (cultivated selection)
  *  - FRUIT_SIZE slightly R-biased (wild ancestor is small-fruited)
  *  - YIELD D-biased (cultivated for productivity)
+ *
+ * Cultivars: Beefsteak, Cherry, Roma, Brandywine, San Marzano
  */
 const TOMATO: SpeciesDefinition = {
   id: 'tomato',
@@ -57,6 +43,14 @@ const TOMATO: SpeciesDefinition = {
   description:
     'A vigorous vining plant prized for its warm-coloured fruits. ' +
     'Excellent genetic diversity with many possible trait expressions.',
+
+  varietyIds: [
+    'tomato_beefsteak',
+    'tomato_cherry',
+    'tomato_roma',
+    'tomato_brandywine',
+    'tomato_san_marzano',
+  ],
 
   basePhenotype: {
     heightFactor:        0.50,
@@ -81,19 +75,6 @@ const TOMATO: SpeciesDefinition = {
 
   geneKeys: ALL_GENE_KEYS,
 
-  alleleFrequencies: makeAlleleFreqs({
-    STATURE:    0.52,
-    FOLIAGE:    0.54,
-    VIGOR:      0.60, // cultivated = higher vigor
-    WATER_USE:  0.48,
-    LIGHT_USE:  0.50,
-    FRUIT_SIZE: 0.40, // wild ancestor = small fruit
-    YIELD:      0.58, // cultivated = higher yield
-    PIGMENT_A:  0.72, // strong warm hue bias
-    PIGMENT_B:  0.60,
-    SEED_SET:   0.58,
-  }),
-
   growthTicks: {
     seedToSprout:           12,  // ~1 min realtime at 5s/tick
     sproutToVegetative:     24,
@@ -117,14 +98,24 @@ const TOMATO: SpeciesDefinition = {
 };
 
 /**
- * CHILI — Capsicum annuum (stub — Phase 6)
+ * CHILI — Capsicum annuum
  * Compact, upright, spicy phenotype.
  * High PIGMENT_A variance (red/orange/yellow/purple fruit).
+ *
+ * Cultivars: Cayenne, Bell, Jalapeño, Habanero, Poblano
  */
 const CHILI: SpeciesDefinition = {
   id: 'chili',
   displayName: 'Chili',
   description: 'Compact upright plant with fiery fruit. Exceptional pigment variation.',
+
+  varietyIds: [
+    'chili_cayenne',
+    'chili_bell',
+    'chili_jalapeno',
+    'chili_habanero',
+    'chili_poblano',
+  ],
 
   basePhenotype: {
     heightFactor:        0.38,
@@ -149,19 +140,6 @@ const CHILI: SpeciesDefinition = {
 
   geneKeys: ALL_GENE_KEYS,
 
-  alleleFrequencies: makeAlleleFreqs({
-    STATURE:    0.35, // compact plants
-    FOLIAGE:    0.50,
-    VIGOR:      0.55,
-    WATER_USE:  0.60, // drought tolerant
-    LIGHT_USE:  0.54,
-    FRUIT_SIZE: 0.35, // small but mighty
-    YIELD:      0.52,
-    PIGMENT_A:  0.65,
-    PIGMENT_B:  0.55,
-    SEED_SET:   0.60,
-  }),
-
   growthTicks: {
     seedToSprout:           14,
     sproutToVegetative:     28,
@@ -185,14 +163,24 @@ const CHILI: SpeciesDefinition = {
 };
 
 /**
- * BASIL — Ocimum basilicum (stub — Phase 6)
+ * BASIL — Ocimum basilicum
  * Aromatic foliage plant. No fruit — yield is leaf harvest.
  * Fast-growing, shade tolerant.
+ *
+ * Cultivars: Genovese, Thai, Lemon, Purple Opal, Cinnamon
  */
 const BASIL: SpeciesDefinition = {
   id: 'basil',
   displayName: 'Basil',
   description: 'Aromatic herb with rapid growth and rich foliage. Harvested for leaves.',
+
+  varietyIds: [
+    'basil_genovese',
+    'basil_thai',
+    'basil_lemon',
+    'basil_purple_opal',
+    'basil_cinnamon',
+  ],
 
   basePhenotype: {
     heightFactor:        0.30,
@@ -217,19 +205,6 @@ const BASIL: SpeciesDefinition = {
 
   geneKeys: ALL_GENE_KEYS,
 
-  alleleFrequencies: makeAlleleFreqs({
-    STATURE:    0.30,
-    FOLIAGE:    0.72, // high foliage expression
-    VIGOR:      0.68,
-    WATER_USE:  0.44,
-    LIGHT_USE:  0.56,
-    FRUIT_SIZE: 0.20,
-    YIELD:      0.45,
-    PIGMENT_A:  0.58,
-    PIGMENT_B:  0.50,
-    SEED_SET:   0.52,
-  }),
-
   growthTicks: {
     seedToSprout:           8,
     sproutToVegetative:     16,
@@ -253,14 +228,24 @@ const BASIL: SpeciesDefinition = {
 };
 
 /**
- * RADISH — Raphanus sativus (stub — Phase 6)
+ * RADISH — Raphanus sativus
  * Fast-cycling root vegetable. Very short lifecycle.
  * Root colour variance is the main genetic expression point.
+ *
+ * Cultivars: Daikon, Cherry Belle, French Breakfast, Watermelon, Black Spanish
  */
 const RADISH: SpeciesDefinition = {
   id: 'radish',
   displayName: 'Radish',
   description: 'Rapid-cycling root vegetable with striking colour variation underground.',
+
+  varietyIds: [
+    'radish_daikon',
+    'radish_cherry_belle',
+    'radish_french_breakfast',
+    'radish_watermelon',
+    'radish_black_spanish',
+  ],
 
   basePhenotype: {
     heightFactor:        0.22,
@@ -284,19 +269,6 @@ const RADISH: SpeciesDefinition = {
   },
 
   geneKeys: ALL_GENE_KEYS,
-
-  alleleFrequencies: makeAlleleFreqs({
-    STATURE:    0.25,
-    FOLIAGE:    0.42,
-    VIGOR:      0.72,
-    WATER_USE:  0.54,
-    LIGHT_USE:  0.48,
-    FRUIT_SIZE: 0.55,
-    YIELD:      0.48,
-    PIGMENT_A:  0.55,
-    PIGMENT_B:  0.50,
-    SEED_SET:   0.65,
-  }),
 
   growthTicks: {
     seedToSprout:           6,

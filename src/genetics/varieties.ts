@@ -1,397 +1,525 @@
 // ─────────────────────────────────────────────
 // src/genetics/varieties.ts
 //
-// Plant Varieties — pre-defined cultivar presets.
-// 5 per species × 4 species = 20 named varieties.
+// Variety (cultivar) definitions for each species.
+// 5 varieties per species × 4 species = 20 unique plant types.
 //
-// VALID GENE KEYS (from genes.ts): STATURE, FOLIAGE, VIGOR,
-//   WATER_USE, LIGHT_USE, FRUIT_SIZE, YIELD, PIGMENT_A, PIGMENT_B, SEED_SET
-//
-// Each variety defines per-gene allele frequency biases
-// that skew seed generation toward a specific cultivar type.
+// Each variety defines:
+//   - basePhenotypeOffsets: deltas applied on top of species basePhenotype
+//     (these make Cherry tomatoes small+prolific vs Beefsteak large+few)
+//   - alleleFreqOverrides: which alleles are more common in this variety
+//     (a Bell pepper has different pigment/size freq than a Cayenne)
+//   - baseHue: optional color overrides for SVG rendering distinctiveness
 // ─────────────────────────────────────────────
 
-import type { SpeciesId, Genotype, Phenotype } from '../types';
+import type { VarietyDefinition } from '../types';
 import { ALL_GENE_KEYS } from './genes';
-import { getSpecies } from './species';
-import { computePhenotype } from './genotype';
 
-// ─── Types ────────────────────────────────────
+// ─── Helper ───────────────────────────────────
 
-export type VarietyDefinition = {
-  id: string;
-  speciesId: SpeciesId;
-  displayName: string;
-  description: string;
-  /** Per-gene dominant allele probability (0–1). Only valid gene keys are used. */
-  alleleFrequencies: Partial<Record<string, number>>;
-  /** Expected rarity tier */
-  rarityHint: 'common' | 'uncommon' | 'rare' | 'legendary';
-};
+/**
+ * Create a variety definition with typed fields.
+ */
+function variety(def: VarietyDefinition): VarietyDefinition {
+  return def;
+}
 
-// ─── TOMATO VARIETIES ─────────────────────────
+// ─── TOMATO VARIETIES ──────────────────────────
 
-const TOMATO_VARIETIES: VarietyDefinition[] = [
-  {
-    id: 'tomato_sweet_cherry',
-    speciesId: 'tomato',
-    displayName: 'Sweet Cherry',
-    description: 'Compact clusters of bite-sized, intensely sweet fruits. Heavy yielder.',
-    alleleFrequencies: {
-      FRUIT_SIZE: 0.25,
-      YIELD:      0.80,
-      VIGOR:      0.75,
-      PIGMENT_A:  0.80,
-      STATURE:    0.45,
-    },
-    rarityHint: 'common',
+export const TOMATO_BEEFSTEAK = variety({
+  id: 'tomato_beefsteak',
+  speciesId: 'tomato',
+  displayName: 'Beefsteak',
+  description: 'Massive ribbed fruits up to 1kg each. A showstopper on the vine.',
+  basePhenotypeOffsets: {
+    fruitSize: +0.30,
+    fruitCount: -0.30,
+    stemThickness: +0.15,
+    heightFactor: +0.10,
+    growthRate: -0.08,
   },
-  {
-    id: 'tomato_beefsteak',
-    speciesId: 'tomato',
-    displayName: 'Beefsteak',
-    description: 'Massive fruits on a robust vine. Lower quantity but impressive size.',
-    alleleFrequencies: {
-      FRUIT_SIZE: 0.92,
-      YIELD:      0.30,
-      STATURE:    0.80,
-      FOLIAGE:    0.75,
-      WATER_USE:  0.60,
-    },
-    rarityHint: 'uncommon',
+  alleleFreqOverrides: {
+    FRUIT_SIZE: 0.80,
+    YIELD: 0.45,
+    VIGOR: 0.55,
   },
-  {
-    id: 'tomato_golden_sunrise',
-    speciesId: 'tomato',
-    displayName: 'Golden Sunrise',
-    description: 'Striking golden-yellow fruits with mild flavour. Unusual pigment.',
-    alleleFrequencies: {
-      PIGMENT_A:  0.15,
-      PIGMENT_B:  0.20,
-      FRUIT_SIZE: 0.50,
-      YIELD:      0.55,
-      LIGHT_USE:  0.65,
-    },
-    rarityHint: 'rare',
-  },
-  {
-    id: 'tomato_black_krim',
-    speciesId: 'tomato',
-    displayName: 'Black Krim',
-    description: 'Dramatic dark-purple fruits. Complex flavour. Rare heirloom.',
-    alleleFrequencies: {
-      PIGMENT_A:  0.10,
-      PIGMENT_B:  0.08,
-      FRUIT_SIZE: 0.65,
-      SEED_SET:   0.40,
-      VIGOR:      0.70,
-    },
-    rarityHint: 'legendary',
-  },
-  {
-    id: 'tomato_roma',
-    speciesId: 'tomato',
-    displayName: 'Roma',
-    description: 'Classic plum-type tomato bred for sauce. Reliable productivity.',
-    alleleFrequencies: {
-      FRUIT_SIZE: 0.60,
-      YIELD:      0.70,
-      SEED_SET:   0.40,
-      WATER_USE:  0.55,
-      STATURE:    0.50,
-      VIGOR:      0.65,
-    },
-    rarityHint: 'common',
-  },
-];
+});
 
-// ─── CHILI VARIETIES ──────────────────────────
+export const TOMATO_CHERRY = variety({
+  id: 'tomato_cherry',
+  speciesId: 'tomato',
+  displayName: 'Cherry',
+  description: 'Bite-sized fruits bursting with sweetness. Prolific and vigorous.',
+  basePhenotypeOffsets: {
+    fruitSize: -0.20,
+    fruitCount: +0.35,
+    growthRate: +0.10,
+    branchDensity: +0.10,
+  },
+  alleleFreqOverrides: {
+    FRUIT_SIZE: 0.20,
+    YIELD: 0.70,
+    VIGOR: 0.65,
+  },
+});
 
-const CHILI_VARIETIES: VarietyDefinition[] = [
-  {
-    id: 'chili_jalapeno',
-    speciesId: 'chili',
-    displayName: 'Jalapeño',
-    description: 'Classic medium-heat chili. Thick-walled fruits. Reliable producer.',
-    alleleFrequencies: {
-      FRUIT_SIZE: 0.55,
-      YIELD:      0.65,
-      PIGMENT_A:  0.70,
-      STATURE:    0.40,
-      FOLIAGE:    0.50,
-    },
-    rarityHint: 'common',
+export const TOMATO_ROMA = variety({
+  id: 'tomato_roma',
+  speciesId: 'tomato',
+  displayName: 'Roma',
+  description: 'Classic paste tomato with dense flesh and few seeds. Ideal for sauces.',
+  basePhenotypeOffsets: {
+    fruitSize: +0.05,
+    fruitCount: +0.15,
+    seedViability: -0.10,
+    waterEfficiency: +0.12,
+    hardiness: +0.10,
   },
-  {
-    id: 'chili_habanero',
-    speciesId: 'chili',
-    displayName: 'Habanero',
-    description: 'Intensely hot with fruity notes. Lantern-shaped orange fruits.',
-    alleleFrequencies: {
-      FRUIT_SIZE: 0.35,
-      PIGMENT_A:  0.85,
-      PIGMENT_B:  0.30,
-      YIELD:      0.50,
-      WATER_USE:  0.45,
-    },
-    rarityHint: 'uncommon',
+  alleleFreqOverrides: {
+    FRUIT_SIZE: 0.50,
+    YIELD: 0.60,
+    SEED_SET: 0.40,
+    WATER_USE: 0.60,
   },
-  {
-    id: 'chili_cayenne',
-    speciesId: 'chili',
-    displayName: 'Cayenne',
-    description: 'Long slender bright-red fruits. Vigorous and prolific.',
-    alleleFrequencies: {
-      STATURE:    0.60,
-      YIELD:      0.80,
-      FRUIT_SIZE: 0.30,
-      VIGOR:      0.75,
-      PIGMENT_A:  0.78,
-    },
-    rarityHint: 'common',
+});
+
+export const TOMATO_BRANDYWINE = variety({
+  id: 'tomato_brandywine',
+  speciesId: 'tomato',
+  displayName: 'Brandywine',
+  description: 'Heritage variety prized for complex flavour. Pinkish fruit, lower yield.',
+  basePhenotypeOffsets: {
+    fruitSize: +0.20,
+    fruitCount: -0.20,
+    primaryColorShift: -0.25, // pinkish shift
+    growthRate: -0.12,
+    hardiness: +0.06,
   },
-  {
-    id: 'chili_purple_beauty',
-    speciesId: 'chili',
-    displayName: 'Purple Beauty',
-    description: 'Compact plant with striking purple foliage and dark violet fruits.',
-    alleleFrequencies: {
-      PIGMENT_A:  0.20,
-      PIGMENT_B:  0.10,
-      FOLIAGE:    0.60,
-      STATURE:    0.30,
-      VIGOR:      0.45,
-    },
-    rarityHint: 'rare',
+  alleleFreqOverrides: {
+    FRUIT_SIZE: 0.65,
+    YIELD: 0.35,
+    VIGOR: 0.45,
+    PIGMENT_A: 0.30, // more recessive = muted pink tones
   },
-  {
-    id: 'chili_carolina_reaper',
-    speciesId: 'chili',
-    displayName: 'Carolina Reaper',
-    description: 'Extreme heat champion. Wrinkled fruits in vibrant red.',
-    alleleFrequencies: {
-      FRUIT_SIZE: 0.40,
-      YIELD:      0.35,
-      PIGMENT_A:  0.90,
-      VIGOR:      0.30,
-      HARDINESS:  0.65,
-    },
-    rarityHint: 'legendary',
+  baseHue: {
+    fruit: 350, // pink-red
   },
-];
+});
+
+export const TOMATO_SAN_MARZANO = variety({
+  id: 'tomato_san_marzano',
+  speciesId: 'tomato',
+  displayName: 'San Marzano',
+  description: 'Elongated plum tomato from Italy. Sweet, low acidity, premium flavour.',
+  basePhenotypeOffsets: {
+    fruitSize: +0.08,
+    fruitCount: +0.10,
+    seedViability: +0.08,
+    yieldMultiplier: +0.15,
+    saturationBoost: +0.10,
+  },
+  alleleFreqOverrides: {
+    FRUIT_SIZE: 0.55,
+    YIELD: 0.65,
+    SEED_SET: 0.60,
+    PIGMENT_A: 0.75,
+  },
+});
+
+// ─── CHILI (PEPPER) VARIETIES ──────────────────
+
+export const CHILI_CAYENNE = variety({
+  id: 'chili_cayenne',
+  speciesId: 'chili',
+  displayName: 'Cayenne',
+  description: 'Long, thin, fiery red peppers. Heat-focused with vigorous growth.',
+  basePhenotypeOffsets: {
+    fruitSize: +0.10,
+    fruitCount: +0.25,
+    saturationBoost: +0.15,
+    primaryColorShift: +0.10,
+    growthRate: +0.08,
+    waterEfficiency: +0.10,
+  },
+  alleleFreqOverrides: {
+    FRUIT_SIZE: 0.45,
+    YIELD: 0.60,
+    WATER_USE: 0.65,
+    PIGMENT_A: 0.70,
+  },
+});
+
+export const CHILI_BELL = variety({
+  id: 'chili_bell',
+  speciesId: 'chili',
+  displayName: 'Bell',
+  description: 'Blocky, sweet peppers with thick walls. Zero heat, maximum crunch.',
+  basePhenotypeOffsets: {
+    fruitSize: +0.30,
+    fruitCount: -0.10,
+    stemThickness: +0.12,
+    leafSize: +0.10,
+    waterEfficiency: -0.08,
+  },
+  alleleFreqOverrides: {
+    FRUIT_SIZE: 0.75,
+    YIELD: 0.50,
+    WATER_USE: 0.40,
+    VIGOR: 0.50,
+  },
+});
+
+export const CHILI_JALAPENO = variety({
+  id: 'chili_jalapeno',
+  speciesId: 'chili',
+  displayName: 'Jalapeño',
+  description: 'Medium-heat pepper with thick flesh. Smoky flavour, prolific on the bush.',
+  basePhenotypeOffsets: {
+    fruitSize: +0.15,
+    fruitCount: +0.20,
+    saturationBoost: +0.08,
+    primaryColorShift: -0.05,
+    hardiness: +0.10,
+  },
+  alleleFreqOverrides: {
+    FRUIT_SIZE: 0.55,
+    YIELD: 0.60,
+    PIGMENT_A: 0.60,
+    WATER_USE: 0.55,
+  },
+});
+
+export const CHILI_HABANERO = variety({
+  id: 'chili_habanero',
+  speciesId: 'chili',
+  displayName: 'Habanero',
+  description: 'Extreme heat with fruity, floral notes. Small lantern-shaped fruit.',
+  basePhenotypeOffsets: {
+    fruitSize: -0.10,
+    fruitCount: +0.30,
+    saturationBoost: +0.20,
+    primaryColorShift: +0.20,
+    secondaryColorShift: +0.15,
+    growthRate: -0.05,
+  },
+  alleleFreqOverrides: {
+    FRUIT_SIZE: 0.25,
+    YIELD: 0.65,
+    PIGMENT_A: 0.65,
+    PIGMENT_B: 0.60,
+  },
+  baseHue: {
+    fruit: 25, // orange
+  },
+});
+
+export const CHILI_POBLANO = variety({
+  id: 'chili_poblano',
+  speciesId: 'chili',
+  displayName: 'Poblano',
+  description: 'Mild, rich-flavoured dark green pepper. Large heart-shaped fruit.',
+  basePhenotypeOffsets: {
+    fruitSize: +0.25,
+    fruitCount: -0.05,
+    primaryColorShift: -0.30, // dark green
+    saturationBoost: -0.10,
+    stemThickness: +0.10,
+  },
+  alleleFreqOverrides: {
+    FRUIT_SIZE: 0.70,
+    YIELD: 0.45,
+    PIGMENT_A: 0.35, // recessive = muted green tones
+    VIGOR: 0.55,
+  },
+  baseHue: {
+    fruit: 140, // green
+  },
+});
 
 // ─── BASIL VARIETIES ──────────────────────────
 
-const BASIL_VARIETIES: VarietyDefinition[] = [
-  {
-    id: 'basil_genovese',
-    speciesId: 'basil',
-    displayName: 'Genovese',
-    description: 'Classic Italian sweet basil. Large glossy deep-green leaves.',
-    alleleFrequencies: {
-      FOLIAGE:    0.80,
-      VIGOR:      0.70,
-      STATURE:    0.45,
-      FRUIT_SIZE: 0.55,
-      YIELD:      0.55,
-    },
-    rarityHint: 'common',
+export const BASIL_GENOVESE = variety({
+  id: 'basil_genovese',
+  speciesId: 'basil',
+  displayName: 'Genovese',
+  description: 'Classic Italian sweet basil. Large fragrant leaves, essential for pesto.',
+  basePhenotypeOffsets: {
+    leafSize: +0.15,
+    leafCount: +0.10,
+    branchDensity: +0.10,
+    heightFactor: +0.08,
+    growthRate: +0.05,
   },
-  {
-    id: 'basil_purple_ruby',
-    speciesId: 'basil',
-    displayName: 'Purple Ruby',
-    description: 'Stunning deep-purple leaves with spicy aroma.',
-    alleleFrequencies: {
-      PIGMENT_A:  0.15,
-      PIGMENT_B:  0.12,
-      FOLIAGE:    0.70,
-      STATURE:    0.35,
-      LIGHT_USE:  0.55,
-    },
-    rarityHint: 'uncommon',
+  alleleFreqOverrides: {
+    FOLIAGE: 0.70,
+    STATURE: 0.55,
+    VIGOR: 0.65,
   },
-  {
-    id: 'basil_lemon',
-    speciesId: 'basil',
-    displayName: 'Lemon Basil',
-    description: 'Citrus-scented leaves with refreshing flavour.',
-    alleleFrequencies: {
-      PIGMENT_A:  0.30,
-      FOLIAGE:    0.60,
-      STATURE:    0.40,
-      LIGHT_USE:  0.55,
-      WATER_USE:  0.55,
-    },
-    rarityHint: 'common',
+});
+
+export const BASIL_THAI = variety({
+  id: 'basil_thai',
+  speciesId: 'basil',
+  displayName: 'Thai',
+  description: 'Anise-liquorice aroma with purple stems and pink-purple flowers.',
+  basePhenotypeOffsets: {
+    leafSize: -0.05,
+    leafCount: +0.15,
+    flowerSize: +0.10,
+    secondaryColorShift: -0.35, // purple tones
+    saturationBoost: +0.15,
+    stemThickness: +0.08,
   },
-  {
-    id: 'basil_thaï',
-    speciesId: 'basil',
-    displayName: 'Thai Basil',
-    description: 'Anise-scented with purple stems and pink flowers.',
-    alleleFrequencies: {
-      STATURE:    0.55,
-      PIGMENT_B:  0.25,
-      PIGMENT_A:  0.50,
-      FOLIAGE:    0.60,
-      YIELD:      0.55,
-    },
-    rarityHint: 'uncommon',
+  alleleFreqOverrides: {
+    FOLIAGE: 0.60,
+    PIGMENT_B: 0.35, // recessive purple accent
+    STATURE: 0.50,
   },
-  {
-    id: 'basil_spicy_globe',
-    speciesId: 'basil',
-    displayName: 'Spicy Globe',
-    description: 'Compact dense mound of tiny leaves. Intensely spicy.',
-    alleleFrequencies: {
-      STATURE:    0.15,
-      FOLIAGE:    0.90,
-      VIGOR:      0.65,
-      YIELD:      0.70,
-      LIGHT_USE:  0.55,
-    },
-    rarityHint: 'rare',
+  baseHue: {
+    stem: 300, // purple
+    flower: 310, // pink-purple
   },
-];
+});
+
+export const BASIL_LEMON = variety({
+  id: 'basil_lemon',
+  speciesId: 'basil',
+  displayName: 'Lemon',
+  description: 'Bright citrus aroma. Pale green leaves, white flowers, compact growth.',
+  basePhenotypeOffsets: {
+    leafSize: -0.05,
+    leafCount: +0.05,
+    heightFactor: -0.10,
+    primaryColorShift: -0.20, // paler
+    saturationBoost: -0.15,
+    growthRate: +0.10,
+  },
+  alleleFreqOverrides: {
+    FOLIAGE: 0.55,
+    STATURE: 0.35,
+    VIGOR: 0.70,
+    PIGMENT_A: 0.40,
+  },
+  baseHue: {
+    leaf: 100, // pale green
+  },
+});
+
+export const BASIL_PURPLE_OPAL = variety({
+  id: 'basil_purple_opal',
+  speciesId: 'basil',
+  displayName: 'Purple Opal',
+  description: 'Stunning deep purple foliage. Mild flavour, spectacular ornamental value.',
+  basePhenotypeOffsets: {
+    leafSize: +0.05,
+    leafCount: +0.05,
+    primaryColorShift: -0.50, // strong purple
+    saturationBoost: +0.25,
+    secondaryColorShift: -0.30,
+    growthRate: -0.05,
+  },
+  alleleFreqOverrides: {
+    PIGMENT_A: 0.25, // recessive = purple
+    PIGMENT_B: 0.30,
+    FOLIAGE: 0.60,
+    VIGOR: 0.50,
+  },
+  baseHue: {
+    leaf: 290, // purple
+    stem: 280,
+  },
+});
+
+export const BASIL_CINNAMON = variety({
+  id: 'basil_cinnamon',
+  speciesId: 'basil',
+  displayName: 'Cinnamon',
+  description: 'Spicy cinnamon-clove scent. Red-veined leaves, dark purple flower spikes.',
+  basePhenotypeOffsets: {
+    leafSize: +0.05,
+    leafCount: -0.05,
+    heightFactor: +0.15,
+    secondaryColorShift: -0.20,
+    saturationBoost: +0.10,
+    flowerSize: +0.12,
+  },
+  alleleFreqOverrides: {
+    STATURE: 0.60,
+    FOLIAGE: 0.50,
+    PIGMENT_B: 0.40,
+    VIGOR: 0.55,
+  },
+  baseHue: {
+    flower: 290,
+  },
+});
 
 // ─── RADISH VARIETIES ─────────────────────────
 
-const RADISH_VARIETIES: VarietyDefinition[] = [
-  {
-    id: 'radish_cherry_belle',
-    speciesId: 'radish',
-    displayName: 'Cherry Belle',
-    description: 'Classic round red radish. Crisp white flesh, mild bite.',
-    alleleFrequencies: {
-      FRUIT_SIZE: 0.50,
-      FOLIAGE:    0.40,
-      PIGMENT_A:  0.75,
-      VIGOR:      0.80,
-      SEED_SET:   0.60,
-    },
-    rarityHint: 'common',
+export const RADISH_DAIKON = variety({
+  id: 'radish_daikon',
+  speciesId: 'radish',
+  displayName: 'Daikon',
+  description: 'Massive white Asian radish. Mild flavour, can exceed 45cm in length.',
+  basePhenotypeOffsets: {
+    fruitSize: +0.40,  // root size
+    fruitCount: -0.15,
+    heightFactor: +0.20,
+    leafSize: +0.15,
+    primaryColorShift: -0.30, // white
+    saturationBoost: -0.20,
+    growthRate: +0.05,
   },
-  {
-    id: 'radish_watermelon',
-    speciesId: 'radish',
-    displayName: 'Watermelon',
-    description: 'Large round radish with green exterior and pink-magenta interior.',
-    alleleFrequencies: {
-      FRUIT_SIZE: 0.75,
-      PIGMENT_A:  0.20,
-      PIGMENT_B:  0.15,
-      YIELD:      0.45,
-      VIGOR:      0.55,
-    },
-    rarityHint: 'rare',
+  alleleFreqOverrides: {
+    FRUIT_SIZE: 0.80,
+    YIELD: 0.40,
+    STATURE: 0.55,
+    PIGMENT_A: 0.20, // white = recessive
+    VIGOR: 0.65,
   },
-  {
-    id: 'radish_black_spanish',
-    speciesId: 'radish',
-    displayName: 'Black Spanish',
-    description: 'Ancient variety with black skin and white flesh. Sharp bite.',
-    alleleFrequencies: {
-      FRUIT_SIZE: 0.65,
-      PIGMENT_A:  0.10,
-      PIGMENT_B:  0.05,
-      HARDINESS:  0.75,
-      VIGOR:      0.45,
-    },
-    rarityHint: 'legendary',
+  baseHue: {
+    fruit: 0, // white (achromatic)
   },
-  {
-    id: 'radish_french_breakfast',
-    speciesId: 'radish',
-    displayName: 'French Breakfast',
-    description: 'Elegant oblong radish with red top and white tip.',
-    alleleFrequencies: {
-      FRUIT_SIZE: 0.45,
-      PIGMENT_A:  0.72,
-      VIGOR:      0.75,
-      FOLIAGE:    0.50,
-      WATER_USE:  0.55,
-    },
-    rarityHint: 'common',
-  },
-  {
-    id: 'radish_daikon_miyashige',
-    speciesId: 'radish',
-    displayName: 'Daikon Miyashige',
-    description: 'Prized Japanese variety. Long tapered white root.',
-    alleleFrequencies: {
-      FRUIT_SIZE: 0.85,
-      PIGMENT_A:  0.50,
-      PIGMENT_B:  0.50,
-      YIELD:      0.60,
-      VIGOR:      0.50,
-    },
-    rarityHint: 'uncommon',
-  },
-];
+});
 
-// ─── Registry ─────────────────────────────────
+export const RADISH_CHERRY_BELLE = variety({
+  id: 'radish_cherry_belle',
+  speciesId: 'radish',
+  displayName: 'Cherry Belle',
+  description: 'Classic round red radish. Crisp white flesh, quick to mature.',
+  basePhenotypeOffsets: {
+    fruitSize: +0.05,
+    fruitCount: +0.15,
+    primaryColorShift: +0.15,
+    saturationBoost: +0.10,
+    growthRate: +0.08,
+  },
+  alleleFreqOverrides: {
+    FRUIT_SIZE: 0.50,
+    YIELD: 0.55,
+    PIGMENT_A: 0.70,
+    VIGOR: 0.70,
+  },
+});
 
-export const VARIETY_REGISTRY: Record<string, VarietyDefinition> = {};
+export const RADISH_FRENCH_BREAKFAST = variety({
+  id: 'radish_french_breakfast',
+  speciesId: 'radish',
+  displayName: 'French Breakfast',
+  description: 'Oblong, red-topped radish with white tip. Mild, peppery, elegant.',
+  basePhenotypeOffsets: {
+    fruitSize: +0.10,
+    fruitCount: +0.10,
+    primaryColorShift: +0.10,
+    secondaryColorShift: +0.05,
+    saturationBoost: +0.10,
+  },
+  alleleFreqOverrides: {
+    FRUIT_SIZE: 0.55,
+    YIELD: 0.50,
+    PIGMENT_A: 0.65,
+    PIGMENT_B: 0.55,
+  },
+  baseHue: {
+    fruit: 360, // red with white tip
+  },
+});
 
-function registerVarieties(varieties: VarietyDefinition[]): void {
-  for (const v of varieties) {
-    VARIETY_REGISTRY[v.id] = v;
-  }
+export const RADISH_WATERMELON = variety({
+  id: 'radish_watermelon',
+  speciesId: 'radish',
+  displayName: 'Watermelon',
+  description: 'Stunning green outer skin reveals vivid pink-magenta flesh inside.',
+  basePhenotypeOffsets: {
+    fruitSize: +0.15,
+    fruitCount: -0.05,
+    primaryColorShift: -0.25, // green skin
+    secondaryColorShift: +0.35, // pink flesh
+    saturationBoost: +0.20,
+    growthRate: -0.05,
+  },
+  alleleFreqOverrides: {
+    FRUIT_SIZE: 0.60,
+    YIELD: 0.45,
+    PIGMENT_A: 0.35,
+    PIGMENT_B: 0.75, // strong pink secondary
+  },
+  baseHue: {
+    fruit: 140, // green
+  },
+});
+
+export const RADISH_BLACK_SPANISH = variety({
+  id: 'radish_black_spanish',
+  speciesId: 'radish',
+  displayName: 'Black Spanish',
+  description: 'Rare heirloom with jet-black skin and pure white flesh. Sharp, earthy flavour.',
+  basePhenotypeOffsets: {
+    fruitSize: +0.20,
+    fruitCount: -0.10,
+    primaryColorShift: -0.60, // very dark
+    saturationBoost: -0.30,
+    hardiness: +0.15,
+    growthRate: -0.10,
+  },
+  alleleFreqOverrides: {
+    FRUIT_SIZE: 0.65,
+    YIELD: 0.40,
+    PIGMENT_A: 0.10, // very recessive = black
+    VIGOR: 0.50,
+    SEED_SET: 0.55,
+  },
+  baseHue: {
+    fruit: 30, // dark brown-black
+  },
+});
+
+// ─── VARIETY REGISTRY ─────────────────────────
+
+export const VARIETY_REGISTRY: Record<string, VarietyDefinition> = {
+  // Tomatoes
+  tomato_beefsteak: TOMATO_BEEFSTEAK,
+  tomato_cherry: TOMATO_CHERRY,
+  tomato_roma: TOMATO_ROMA,
+  tomato_brandywine: TOMATO_BRANDYWINE,
+  tomato_san_marzano: TOMATO_SAN_MARZANO,
+
+  // Chili
+  chili_cayenne: CHILI_CAYENNE,
+  chili_bell: CHILI_BELL,
+  chili_jalapeno: CHILI_JALAPENO,
+  chili_habanero: CHILI_HABANERO,
+  chili_poblano: CHILI_POBLANO,
+
+  // Basil
+  basil_genovese: BASIL_GENOVESE,
+  basil_thai: BASIL_THAI,
+  basil_lemon: BASIL_LEMON,
+  basil_purple_opal: BASIL_PURPLE_OPAL,
+  basil_cinnamon: BASIL_CINNAMON,
+
+  // Radish
+  radish_daikon: RADISH_DAIKON,
+  radish_cherry_belle: RADISH_CHERRY_BELLE,
+  radish_french_breakfast: RADISH_FRENCH_BREAKFAST,
+  radish_watermelon: RADISH_WATERMELON,
+  radish_black_spanish: RADISH_BLACK_SPANISH,
+};
+
+/** Get a variety definition by ID */
+export function getVariety(id: string): VarietyDefinition {
+  const v = VARIETY_REGISTRY[id];
+  if (!v) throw new Error(`Unknown variety: ${id}`);
+  return v;
 }
 
-registerVarieties(TOMATO_VARIETIES);
-registerVarieties(CHILI_VARIETIES);
-registerVarieties(BASIL_VARIETIES);
-registerVarieties(RADISH_VARIETIES);
-
-/** Get all varieties for a given species */
-export function getVarietiesForSpecies(speciesId: SpeciesId): VarietyDefinition[] {
+/** Get all variety IDs for a given species */
+export function getVarietiesForSpecies(speciesId: string): VarietyDefinition[] {
   return Object.values(VARIETY_REGISTRY).filter((v) => v.speciesId === speciesId);
 }
 
-/** Get a single variety by id */
-export function getVariety(id: string): VarietyDefinition | undefined {
-  return VARIETY_REGISTRY[id];
-}
-
-/** All variety IDs */
-export const ALL_VARIETY_IDS = Object.keys(VARIETY_REGISTRY);
-
-// ─── Seed Generation from Varieties ──────────
-
-/**
- * Generate a seed from a variety definition.
- * Only uses valid gene keys from the gene pool — any unknown keys
- * in alleleFrequencies are silently ignored.
- */
-export function generateVarietySeed(
-  varietyId: string,
-): { genotype: Genotype; phenotype: Phenotype } | null {
-  const variety = getVariety(varietyId);
-  if (!variety) return null;
-
-  const species = getSpecies(variety.speciesId);
-  const varietyFreqs = variety.alleleFrequencies as Record<string, number | undefined>;
-
-  // Merge: variety overrides species defaults for valid gene keys only
-  const mergedFreqs: Record<string, number> = {};
-  for (const key of ALL_GENE_KEYS) {
-    const override = varietyFreqs[key];
-    mergedFreqs[key] = override !== undefined ? override
-      : species.alleleFrequencies[key] ?? 0.5;
-  }
-
-  // Generate genotype from merged frequencies
-  const genotype: Genotype = {};
-  for (const key of ALL_GENE_KEYS) {
-    const dFreq = mergedFreqs[key] ?? 0.5;
-    genotype[key] = [
-      Math.random() < dFreq ? 'D' : 'R',
-      Math.random() < dFreq ? 'D' : 'R',
-    ];
-  }
-
-  const phenotype = computePhenotype(genotype, variety.speciesId);
-  return { genotype, phenotype };
+/** Default variety per species (the first one defined) */
+export function getDefaultVariety(speciesId: string): string {
+  const varieties = getVarietiesForSpecies(speciesId);
+  return varieties[0]?.id ?? `${speciesId}_beefsteak`;
 }

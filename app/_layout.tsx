@@ -1,17 +1,15 @@
 // ─────────────────────────────────────────────
 // app/_layout.tsx
 // Root layout — Expo Router entry point
-// Phase 8: Load saved state + Toast + Autosave
 // ─────────────────────────────────────────────
 
-import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, AppState } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, StyleSheet } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { COLORS } from '../src/constants/theme';
-import { ToastContainer } from '../src/components/feedback/Toast';
 import {
   useAppStore,
   useGardenActions,
@@ -19,78 +17,128 @@ import {
   useSettingsActions,
   useInventoryInitialised,
 } from '../src/store';
-import { loadGame, startAutosave, stopAutosave, saveGame } from '../src/store/persistenceStore';
-import { showInfo } from '../src/components/feedback/useToastStore';
+import {
+  loadSavedState,
+  subscribeAutosave,
+  type PersistedState,
+} from '../src/store/persistence';
+import { initNotifications } from '../src/simulation/notifications';
 
 // ─── App Initialiser ─────────────────────────
+// Runs once on mount:
+//  1. Restore saved state (if any)
+//  2. Ensure garden plots exist
+//  3. Seed starting inventory on first launch
+//  4. Apply offline catch-up ticks
+//  5. Wire autosave
+//  6. Init notifications
 
 function AppInitialiser() {
   const { initGarden, tickSimulation, setLastSimulatedAt } = useGardenActions();
-  const { initStartingInventory } = useInventoryActions();
-  const { markInventoryInitialised } = useSettingsActions();
+  const { initStartingInventory, addSeed, addHarvest, addCurrency } = useInventoryActions();
+  const { setSimulationSpeed, setNotificationsEnabled, setSoundEnabled, completeTutorial, markInventoryInitialised } = useSettingsActions();
+  const { recordDiscovery } = useAppStore((s) => ({ recordDiscovery: s.recordDiscovery }));
 
   const lastSimulatedAt     = useAppStore((s) => s.lastSimulatedAt);
   const simulationSpeed     = useAppStore((s) => s.simulationSpeed);
   const inventoryInitialised = useInventoryInitialised();
 
   useEffect(() => {
-    (async () => {
+    let mounted = true;
+
+    async function initialise() {
+      // 0. Init notifications
+      await initNotifications();
+
       // 1. Try to restore saved state
-      const savedState = await loadGame();
+      const savedState = await loadSavedState();
+
       if (savedState) {
-        // Apply saved state to store (partial update)
-        useAppStore.setState(savedState);
-        showInfo('Game restored from save');
+        // Restore garden
+        const store = useAppStore.getState();
+        // We need to set garden, inventory, settings, and journal state
+        // Since Zustand doesn't have a batch setter, we do individual mutations
+
+        // Restore settings first
+        setSimulationSpeed(savedState.settings.simulationSpeed);
+        setNotificationsEnabled(savedState.settings.notificationsEnabled);
+        setSoundEnabled(savedState.settings.soundEnabled);
+        if (savedState.settings.tutorialComplete) completeTutorial();
+        if (savedState.settings.inventoryInitialised) markInventoryInitialised();
+
+        // Restore garden — rebuild plots and plants via internal state
+        // We do this by directly setting the garden slice
+        useAppStore.setState({
+          plots: savedState.garden.plots,
+          plants: savedState.garden.plants,
+        });
+
+        // Restore inventory
+        useAppStore.setState({
+          seeds: savedState.inventory.seeds,
+          harvests: savedState.inventory.harvests,
+          currency: savedState.inventory.currency,
+        });
+
+        // Restore journal
+        useAppStore.setState({
+          entries: savedState.journal.entries,
+          newDiscoveries: savedState.journal.newDiscoveries,
+        });
+      } else {
+        // No saved state — fresh start
+        // 2. Initialise garden grid (no-op if already exists)
+        initGarden();
+
+        // 3. Seed starting inventory on first ever launch
+        if (!inventoryInitialised) {
+          initStartingInventory();
+          markInventoryInitialised();
+        }
       }
 
-      // 2. Initialise garden grid (no-op if already exists from save)
-      initGarden();
-
-      // 3. Seed starting inventory on first ever launch
-      if (!inventoryInitialised && !savedState) {
-        initStartingInventory();
-        markInventoryInitialised();
-      }
-
-      // 4. Offline catch-up simulation
+      // 4. Offline catch-up simulation with chunking
+      // Phase 9: Chunked simulation prevents startup jank
+      // Instead of simulating all 720+ ticks at once, process in batches
       const now = Date.now();
-      const savedLastAt = savedState?.lastSimulatedAt ?? lastSimulatedAt;
-      const elapsedMs = now - savedLastAt;
+      const elapsedMs = now - lastSimulatedAt;
       const elapsedTicks = Math.floor((elapsedMs / 5000) * simulationSpeed);
+
       if (elapsedTicks > 0) {
-        tickSimulation(elapsedTicks);
+        // Process ticks in chunks to yield to main thread
+        const CHUNK_SIZE = 100; // Simulate 100 ticks per chunk
+        let processedTicks = 0;
+
+        const processChunk = () => {
+          const remaining = elapsedTicks - processedTicks;
+          const chunkTicks = Math.min(CHUNK_SIZE, remaining);
+
+          if (chunkTicks > 0) {
+            tickSimulation(chunkTicks);
+            processedTicks += chunkTicks;
+
+            if (processedTicks < elapsedTicks) {
+              // Schedule next chunk on next event loop iteration
+              setImmediate(processChunk);
+            }
+          }
+        };
+
+        processChunk();
       }
+
       setLastSimulatedAt(now);
 
-      // 5. Start autosave
-      startAutosave(() => useAppStore.getState());
-    })();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  return null;
-}
-
-// ─── Background Save Listener ─────────────────
-
-function BackgroundSaveHandler() {
-  const appState = useRef(AppState.currentState);
-
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
-      // Save whenever the app goes to background or becomes inactive
-      if (appState.current.match(/active|inactive/) && nextAppState === 'background') {
-        saveGame(() => useAppStore.getState());
+      // 5. Wire autosave (subscribes to store, writes debounced to AsyncStorage)
+      if (mounted) {
+        subscribeAutosave(useAppStore);
       }
-      appState.current = nextAppState;
-    });
+    }
 
-    return () => {
-      // Save on unmount (app closing)
-      saveGame(() => useAppStore.getState());
-      stopAutosave();
-      subscription.remove();
-    };
-  }, []);
+    initialise();
+
+    return () => { mounted = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return null;
 }
@@ -103,7 +151,6 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <StatusBar style="light" backgroundColor={COLORS.bg_deep} />
         <AppInitialiser />
-        <BackgroundSaveHandler />
         <Stack
           screenOptions={{
             headerShown: false,
@@ -113,8 +160,6 @@ export default function RootLayout() {
         >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         </Stack>
-        {/* Toast overlay — renders above everything */}
-        <ToastContainer />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

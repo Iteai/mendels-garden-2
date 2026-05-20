@@ -1,10 +1,11 @@
 // ─────────────────────────────────────────────
 // app/(tabs)/settings.tsx
 // Settings screen — preferences and debug info
+// Phase 7: collection stats, legendary count
 // ─────────────────────────────────────────────
 
-import React, { useState, useEffect } from 'react';
-import { View, Switch, Pressable, StyleSheet } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Switch, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ScreenShell, AppText, Card, PressableRow } from '../../src/components/ui';
 import {
@@ -13,14 +14,17 @@ import {
   useSeeds,
   useGardenPlants,
   useCurrency,
+  useJournalEntries,
 } from '../../src/store';
 import { COLORS, SPACING, RADIUS, TYPOGRAPHY } from '../../src/constants/theme';
-import { getLastSaveTimestamp, deleteSave, saveGame } from '../../src/store/persistenceStore';
+import { VARIETY_REGISTRY } from '../../src/genetics/varieties';
+import { asIconName, type IoniconName } from '../../src/utils/formatters';
+import type { JournalEntry, PlantInstance, SeedItem } from '../../src/types';
 
 // ─── Setting Row ──────────────────────────────
 
 type SettingRowProps = {
-  icon: string;
+  icon: IoniconName;
   label: string;
   description?: string;
   right?: React.ReactNode;
@@ -30,7 +34,7 @@ function SettingRow({ icon, label, description, right }: SettingRowProps) {
   return (
     <View style={styles.settingRow}>
       <View style={styles.settingIcon}>
-        <Ionicons name={icon as any} size={18} color={COLORS.green_primary} />
+        <Ionicons name={icon} size={18} color={COLORS.green_primary} />
       </View>
       <View style={styles.settingContent}>
         <AppText variant="body" color="primary">{label}</AppText>
@@ -82,11 +86,26 @@ function StatsOverview() {
   const seeds = useSeeds();
   const plants = useGardenPlants();
   const currency = useCurrency();
+  const journalEntries = useJournalEntries();
+  const totalVarieties = Object.keys(VARIETY_REGISTRY).length;
+  const discoveredCount = Object.keys(journalEntries).length;
+
+  // Memoize expensive calculations to avoid re-filtering on every render
+  const legendaryCount = useMemo(
+    () => Object.values(journalEntries).filter((e: JournalEntry) => e.bestRarityScore >= 0.85).length,
+    [journalEntries]
+  );
+
+  const totalSeeds = useMemo(
+    () => Object.values(seeds).reduce((s: number, i: SeedItem) => s + i.quantity, 0),
+    [seeds]
+  );
 
   const stats = [
-    { label: 'Plants',   value: Object.keys(plants).length },
-    { label: 'Seeds',    value: Object.values(seeds).reduce((s, i) => s + i.quantity, 0) },
-    { label: 'Spores ✦', value: currency },
+    { label: 'Plants',      value: Object.keys(plants).length },
+    { label: 'Seeds',       value: totalSeeds },
+    { label: 'Spores ✦',    value: currency },
+    { label: 'Collection',  value: `${discoveredCount}/${totalVarieties}` },
   ];
 
   return (
@@ -97,6 +116,13 @@ function StatsOverview() {
           <AppText variant="mono" color="accent">{s.value}</AppText>
         </View>
       ))}
+      {legendaryCount > 0 && (
+        <View style={styles.legendaryRow}>
+          <AppText variant="caption" color="accent">
+            🌟 {legendaryCount} legendary {legendaryCount === 1 ? 'variety' : 'varieties'} discovered!
+          </AppText>
+        </View>
+      )}
     </Card>
   );
 }
@@ -106,7 +132,12 @@ function StatsOverview() {
 function SimulationInfo() {
   const speed    = useAppStore((s) => s.simulationSpeed);
   const plants = useGardenPlants();
-  const living = Object.values(plants).filter((p) => p.growthStage !== 'dead').length;
+
+  // Memoize living plant count calculation
+  const living = useMemo(
+    () => Object.values(plants).filter((p: PlantInstance) => p.growthStage !== 'dead').length,
+    [plants]
+  );
 
   // At current speed, how long does 1 tomato lifecycle take?
   // Tomato total ticks ≈ 12+24+36+30+24 = 126 base ticks
@@ -229,7 +260,7 @@ export default function SettingsScreen() {
         <SettingRow
           icon="leaf"
           label="Plant Genetics"
-          description="v1.0.0 — Phase 5 Game Loop"
+          description="v1.0.0 — All 7 phases"
         />
         <View style={styles.settingDivider} />
         <SettingRow
@@ -258,6 +289,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: SPACING['1'],
+  },
+  legendaryRow: {
+    paddingTop: SPACING['1'],
+    alignItems: 'center',
   },
   settingsGroup: {
     gap: 0,

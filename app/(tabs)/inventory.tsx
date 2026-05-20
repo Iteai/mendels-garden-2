@@ -1,10 +1,10 @@
 // ─────────────────────────────────────────────
 // app/(tabs)/inventory.tsx
 // Inventory screen — seeds with genetics detail modal
-// Phase 5: Shop access added to inventory header
+// Phase 2: genetics breakdown on seed tap
 // ─────────────────────────────────────────────
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -14,12 +14,12 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ScreenShell, AppText, Card, Badge, StatBar } from '../../src/components/ui';
-import { ShopModal, HarvestResultModal } from '../../src/components/ui';
-import { useSeeds, useHarvests, useTotalSeedCount, useCurrency, useInventoryActions, useGardenActions } from '../../src/store';
+import { ScreenShell, AppText, Card, Badge, StatBar, VarietyJournal, DiscoveryToast } from '../../src/components/ui';
+import type { DiscoveryToastData } from '../../src/components/ui/DiscoveryToast';
+import { useSeeds, useHarvests, useTotalSeedCount, useJournalEntries, useJournalActions, useNewDiscoveries, useDiscoveredCount } from '../../src/store';
 import { useSeedGeneticsInfo, DISPLAY_TRAITS } from '../../src/store/useGenetics';
-import { SHOP_ITEMS, type ShopItem } from '../../src/store/inventoryStore';
 import { COLORS, SPACING, RADIUS, TYPOGRAPHY } from '../../src/constants/theme';
+import { getVariety, VARIETY_REGISTRY } from '../../src/genetics/varieties';
 import type { SeedItem, HarvestItem } from '../../src/types';
 
 // ─── Helpers ──────────────────────────────────
@@ -29,6 +29,16 @@ function speciesLabel(id: string): string {
     tomato: 'Tomato', chili: 'Chili', basil: 'Basil', radish: 'Radish',
   };
   return map[id] ?? id;
+}
+
+function varietyName(varietyId: string | undefined): string {
+  if (!varietyId) return '';
+  try {
+    const v = getVariety(varietyId);
+    return v.displayName;
+  } catch {
+    return '';
+  }
 }
 
 function rarityBorderColor(rarity: SeedItem['rarity']): string {
@@ -100,8 +110,8 @@ function SeedCard({ seed, onPress }: { seed: SeedItem; onPress: () => void }) {
           <AppText style={styles.seedEmoji}>🌱</AppText>
         </View>
         <View style={styles.seedInfo}>
-          <AppText variant="subheading" color="primary" style={styles.seedName}>
-            {speciesLabel(seed.speciesId)}
+          <AppText variant="subheading" color="primary" style={styles.seedName} numberOfLines={1}>
+            {varietyName(seed.varietyId) || speciesLabel(seed.speciesId)}
           </AppText>
           <AppText variant="caption" color="muted">
             Gen {seed.generation} · ×{seed.quantity}
@@ -149,7 +159,9 @@ function SeedDetailModal({ seed, onClose }: { seed: SeedItem; onClose: () => voi
         {/* Header */}
         <View style={detailStyles.header}>
           <View>
-            <AppText variant="heading" color="primary">{speciesLabel(seed.speciesId)}</AppText>
+            <AppText variant="heading" color="primary">
+              {varietyName(seed.varietyId) || speciesLabel(seed.speciesId)}
+            </AppText>
             <AppText variant="caption" color="muted">
               Gen {seed.generation} · ×{seed.quantity} · {formatAgo(seed.obtainedAt)}
             </AppText>
@@ -278,7 +290,7 @@ function EmptySeedsState() {
     <Card variant="inset" style={styles.emptyCard}>
       <Ionicons name="leaf-outline" size={36} color={COLORS.green_muted} />
       <AppText variant="body" color="muted" style={styles.emptyText}>
-        No seeds yet. Grow and harvest plants to collect seeds, or buy wild seeds from the Shop.
+        No seeds yet. Grow and harvest plants to collect seeds, or breed new varieties in the Lab.
       </AppText>
     </Card>
   );
@@ -300,28 +312,65 @@ function EmptyHarvestsState() {
 export default function InventoryScreen() {
   const [activeTab, setActiveTab]     = useState<InventoryTab>('seeds');
   const [selectedSeed, setSelectedSeed] = useState<SeedItem | null>(null);
-  const [showShop, setShowShop]         = useState(false);
+  const [showJournal, setShowJournal] = useState(false);
 
-  const seeds     = useSeeds();
-  const harvests  = useHarvests();
-  const totalSeeds = useTotalSeedCount();
-  const currency   = useCurrency();
+  const seeds         = useSeeds();
+  const harvests      = useHarvests();
+  const totalSeeds    = useTotalSeedCount();
+  const journalEntries = useJournalEntries();
+  const newDiscoveries = useNewDiscoveries();
+  const discoveredCount = useDiscoveredCount();
+  const { recordDiscovery, clearNewDiscoveries } = useJournalActions();
 
-  const { spendCurrency, buyWildSeed, canAfford } = useInventoryActions();
-  const { waterAllPlants, feedAllPlants }         = useGardenActions();
+  // Track latest discovery for toast
+  const [discoveryToast, setDiscoveryToast] = useState<DiscoveryToastData | null>(null);
 
-  const handleBuyItem = useCallback((item: ShopItem) => {
-    if (!spendCurrency(item.cost)) return;
-    if (item.id === 'water_pack') {
-      waterAllPlants(0.35);
-    } else if (item.id === 'nutrient_pack') {
-      feedAllPlants(0.30);
+  // Record discoveries for new seeds
+  const totalVarieties = Object.keys(VARIETY_REGISTRY).length;
+
+  // Check for new discoveries on seed list change
+  const prevSeedsRef = React.useRef(seeds);
+  React.useEffect(() => {
+    const prev = prevSeedsRef.current;
+    const current = seeds;
+    // Check each current seed for new variety discovery
+    for (const seed of Object.values(current)) {
+      const hadIt = Object.values(prev).some((s) => s.varietyId === seed.varietyId);
+      if (!hadIt && seed.varietyId) {
+        const event = recordDiscovery({
+          varietyId: seed.varietyId,
+          speciesId: seed.speciesId,
+          rarityScore: seed.phenotype.rarityScore,
+          quantity: seed.quantity,
+        });
+        if (event) {
+          setDiscoveryToast({
+            varietyId: event.varietyId,
+            speciesId: event.speciesId,
+            rarityScore: event.rarityScore,
+          });
+        }
+      }
     }
-  }, [spendCurrency, waterAllPlants, feedAllPlants]);
+    prevSeedsRef.current = current;
+  }, [seeds, recordDiscovery]);
 
-  const handleBuyWildSeed = useCallback((speciesId: string) => {
-    buyWildSeed(speciesId);
-  }, [buyWildSeed]);
+  // Show toasts for pending new discoveries
+  React.useEffect(() => {
+    if (newDiscoveries.length > 0 && !discoveryToast) {
+      // Show first pending discovery
+      const vid = newDiscoveries[0];
+      const entry = journalEntries[vid];
+      if (entry) {
+        setDiscoveryToast({
+          varietyId: vid,
+          speciesId: entry.speciesId,
+          rarityScore: entry.bestRarityScore,
+        });
+      }
+      clearNewDiscoveries();
+    }
+  }, [newDiscoveries, discoveryToast, journalEntries, clearNewDiscoveries]);
 
   const seedList = useMemo(() =>
     Object.values(seeds).sort((a, b) => b.phenotype.rarityScore - a.phenotype.rarityScore),
@@ -335,24 +384,33 @@ export default function InventoryScreen() {
 
   return (
     <ScreenShell title="Seeds" subtitle="Your genetic library">
-      {/* Header row with Shop button */}
-      <View style={styles.headerRow}>
-        <TabToggle
-          active={activeTab}
-          onChange={setActiveTab}
-          seedCount={totalSeeds}
-          harvestCount={harvestList.length}
-        />
-        <Pressable
-          style={styles.shopButton}
-          onPress={() => setShowShop(true)}
-        >
-          <Ionicons name="storefront-outline" size={14} color={COLORS.rarity_legendary} />
-          <AppText variant="label" style={{ color: COLORS.rarity_legendary, fontSize: 9 }}>
-            {currency}
-          </AppText>
-        </Pressable>
-      </View>
+      {/* Discovery Toast */}
+      <DiscoveryToast
+        data={discoveryToast}
+        onDismiss={() => setDiscoveryToast(null)}
+      />
+
+      {/* Journal link */}
+      <Pressable
+        style={({ pressed }) => [
+          journalStyles.link,
+          pressed && { opacity: 0.7 },
+        ]}
+        onPress={() => setShowJournal(true)}
+      >
+        <Ionicons name="book-outline" size={16} color={COLORS.text_accent} />
+        <AppText variant="label" color="accent" style={journalStyles.linkText}>
+          Collection Journal ({discoveredCount}/{totalVarieties})
+        </AppText>
+        <Ionicons name="chevron-forward" size={12} color={COLORS.text_accent} />
+      </Pressable>
+
+      <TabToggle
+        active={activeTab}
+        onChange={setActiveTab}
+        seedCount={totalSeeds}
+        harvestCount={harvestList.length}
+      />
 
       <View style={styles.listContainer}>
         {activeTab === 'seeds' ? (
@@ -391,35 +449,47 @@ export default function InventoryScreen() {
         />
       )}
 
-      <ShopModal
-        visible={showShop}
-        currency={currency}
-        canAfford={canAfford}
-        onBuyItem={handleBuyItem}
-        onBuyWildSeed={handleBuyWildSeed}
-        onClose={() => setShowShop(false)}
+      <VarietyJournal
+        visible={showJournal}
+        onClose={() => setShowJournal(false)}
+        journalEntries={journalEntries}
+        totalVarieties={totalVarieties}
       />
     </ScreenShell>
   );
 }
 
-// ─── Styles ───────────────────────────────────
+// ─── Journal link styles ──────────────────────
 
-const styles = StyleSheet.create({
-  headerRow: {
+const journalStyles = StyleSheet.create({
+  link: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING['2'],
-    marginBottom: SPACING['4'],
+    paddingVertical: SPACING['2'],
+    paddingHorizontal: SPACING['4'],
+    marginBottom: SPACING['2'],
+    backgroundColor: COLORS.bg_surface,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.green_deep,
   },
+  linkText: {
+    flex: 1,
+  },
+});
+
+// ─── Styles ───────────────────────────────────
+
+const styles = StyleSheet.create({
   toggle: {
     flexDirection: 'row',
-    flex: 1,
     backgroundColor: COLORS.bg_surface,
     borderRadius: RADIUS.lg,
     borderWidth: 1,
     borderColor: COLORS.border_subtle,
     padding: SPACING['1'],
+    marginBottom: SPACING['4'],
   },
   toggleBtn: {
     flex: 1,
@@ -429,17 +499,6 @@ const styles = StyleSheet.create({
   },
   toggleBtnActive: {
     backgroundColor: COLORS.bg_overlay,
-  },
-  shopButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING['1'],
-    paddingHorizontal: SPACING['2'],
-    paddingVertical: SPACING['2'],
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border_subtle,
-    backgroundColor: COLORS.bg_surface,
   },
   listContainer: {
     gap: SPACING['2'],

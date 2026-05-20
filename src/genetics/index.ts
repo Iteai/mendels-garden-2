@@ -24,6 +24,14 @@ export {
   getSpecies,
 } from './species';
 
+// Varieties
+export {
+  VARIETY_REGISTRY,
+  getVariety,
+  getVarietiesForSpecies,
+  getDefaultVariety,
+} from './varieties';
+
 // Genotype engine
 export {
   resolveExpression,
@@ -32,6 +40,7 @@ export {
   createWildTypeGenotype,
   createDominantGenotype,
   computePhenotype,
+  computeHybridPhenotype,
   getRarityBreakdown,
   applyMutation,
   describeGenotype,
@@ -51,19 +60,3 @@ export {
   type CrossResult,
   type PhenotypePreview,
 } from './hybridiser';
-
-// Rarity
-export {
-  computeRarityLabel,
-  type RarityLabel,
-} from './rarity';
-
-// Varieties
-export {
-  VARIETY_REGISTRY,
-  getVarietiesForSpecies,
-  getVariety,
-  ALL_VARIETY_IDS,
-  generateVarietySeed,
-  type VarietyDefinition,
-} from './varieties';

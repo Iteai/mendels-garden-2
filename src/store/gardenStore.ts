@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────
 // src/store/gardenStore.ts
 // Garden state: plots, living plants, simulation clock
-// Phase 5: compostPlant, bulk water/feed actions
+// Phase 4: tickSimulation wired to simulationCore
 // ─────────────────────────────────────────────
 
 import { StateCreator } from 'zustand';
@@ -52,6 +52,7 @@ export type GardenActions = {
   plantSeed:           (params: {
     plotId:     string;
     speciesId:  SpeciesId;
+    varietyId?: string;
     genotype:   Genotype;
     phenotype:  Phenotype;
     parentIds?: [string | null, string | null];
@@ -62,32 +63,6 @@ export type GardenActions = {
   tickSimulation:      (elapsedTicks: number) => SimulationEvent[];
   setLastSimulatedAt:  (timestamp: number) => void;
   removePlant:         (plantId: string) => void;
-
-  // ── Phase 5: Game Loop Actions ──────────────
-
-  /**
-   * Remove a dead/depleted plant and reclaim the plot.
-   * Simulates composting: gives a tiny currency bonus (1–3 spores).
-   */
-  compostPlant:        (plantId: string) => void;
-
-  /**
-   * Apply water to ALL living plants by a given amount.
-   * Returns count of plants affected.
-   */
-  waterAllPlants:      (amount: number) => number;
-
-  /**
-   * Apply nutrients to ALL living plants by a given amount.
-   * Returns count of plants affected.
-   */
-  feedAllPlants:       (amount: number) => number;
-
-  /**
-   * Count plants that need resources (for UI hints).
-   */
-  countThirstyPlants:  () => number;
-  countHungryPlants:   () => number;
 };
 
 export type GardenSlice = GardenState & GardenActions;
@@ -122,9 +97,11 @@ export const createGardenSlice: StateCreator<
     const now     = Date.now();
     const plantId = generatePlantId();
 
+    // Determine varietyId — either from the seed or default
     const newPlant: PlantInstance = {
       id:             plantId,
       speciesId,
+      varietyId:      '',
       genotype,
       phenotype,
       growthStage:    'seed',
@@ -188,6 +165,9 @@ export const createGardenSlice: StateCreator<
   },
 
   // ── Simulation tick (Phase 4) ─────────────
+  // Delegates entirely to simulatePlants() — a pure function.
+  // Returns collected SimulationEvents for the caller to act on
+  // (notifications, UI badges, etc.).
 
   tickSimulation: (elapsedTicks) => {
     const capped = Math.min(Math.floor(elapsedTicks), GAME.OFFLINE_CATCH_UP_CAP_TICKS);
@@ -204,7 +184,7 @@ export const createGardenSlice: StateCreator<
 
   setLastSimulatedAt: (timestamp) => set({ lastSimulatedAt: timestamp }),
 
-  // ── Remove plant (force remove) ───────────
+  // ── Remove plant ──────────────────────────
 
   removePlant: (plantId) => {
     set((s) => {
@@ -226,83 +206,5 @@ export const createGardenSlice: StateCreator<
         },
       };
     });
-  },
-
-  // ── Phase 5: compostPlant ─────────────────
-
-  compostPlant: (plantId) => {
-    // Simply removes the plant and frees the plot
-    // Currency bonus is small and handled by caller or inventory
-    set((s) => {
-      const plant = s.plants[plantId];
-      if (!plant) return s;
-
-      const updatedPlants = { ...s.plants };
-      delete updatedPlants[plantId];
-
-      return {
-        plants: updatedPlants,
-        plots:  {
-          ...s.plots,
-          [plant.plotId]: {
-            ...s.plots[plant.plotId],
-            state:   'empty',
-            plantId: null,
-          },
-        },
-      };
-    });
-  },
-
-  // ── Phase 5: bulk actions ─────────────────
-
-  waterAllPlants: (amount) => {
-    let count = 0;
-    set((s) => {
-      const updated = { ...s.plants };
-      for (const id in updated) {
-        const p = updated[id];
-        if (p.growthStage === 'dead') continue;
-        updated[id] = {
-          ...p,
-          waterLevel:   Math.min(1, p.waterLevel + amount),
-          lastUpdatedAt: Date.now(),
-        };
-        count++;
-      }
-      return { plants: updated };
-    });
-    return count;
-  },
-
-  feedAllPlants: (amount) => {
-    let count = 0;
-    set((s) => {
-      const updated = { ...s.plants };
-      for (const id in updated) {
-        const p = updated[id];
-        if (p.growthStage === 'dead') continue;
-        updated[id] = {
-          ...p,
-          nutrientLevel: Math.min(1, p.nutrientLevel + amount),
-          lastUpdatedAt: Date.now(),
-        };
-        count++;
-      }
-      return { plants: updated };
-    });
-    return count;
-  },
-
-  countThirstyPlants: () => {
-    return Object.values(get().plants).filter((p) =>
-      p.growthStage !== 'dead' && p.waterLevel < 0.30,
-    ).length;
-  },
-
-  countHungryPlants: () => {
-    return Object.values(get().plants).filter((p) =>
-      p.growthStage !== 'dead' && p.nutrientLevel < 0.25,
-    ).length;
   },
 });

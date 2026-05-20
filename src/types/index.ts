@@ -61,9 +61,37 @@ export type GeneDefinition = {
   mutationRate: number; // 0–1 probability per generation
 };
 
-// ─── Species ─────────────────────────────────
+// ─── Species & Varieties ─────────────────────
 
 export type SpeciesId = 'tomato' | 'chili' | 'basil' | 'radish';
+
+/**
+ * A specific cultivar/variety within a species.
+ * Each variety has a distinct name, description, and base phenotype offsets.
+ */
+export type VarietyId = string;
+
+/** Static definition of a plant variety */
+export type VarietyDefinition = {
+  id: VarietyId;
+  speciesId: SpeciesId;
+  displayName: string;
+  description: string;
+
+  // Offsets applied ON TOP of the species base phenotype
+  basePhenotypeOffsets: Partial<Phenotype>;
+
+  // Allele frequency overrides (subset of genes, same format as species)
+  alleleFreqOverrides: Partial<Record<string, number>>;
+
+  // Base hue overrides (optional — for visually distinct varieties)
+  baseHue?: {
+    stem?: number;
+    leaf?: number;
+    flower?: number;
+    fruit?: number;
+  };
+};
 
 /** Static definition of a plant species */
 export type SpeciesDefinition = {
@@ -71,15 +99,14 @@ export type SpeciesDefinition = {
   displayName: string;
   description: string;
 
-  // Base phenotype values before gene modifiers
+  // Which varieties belong to this species
+  varietyIds: VarietyId[];
+
+  // Base phenotype values before gene modifiers and variety offsets
   basePhenotype: Phenotype;
 
   // Which genes this species carries (subset of the global gene pool)
   geneKeys: string[];
-
-  // Per-gene dominant allele frequency probability (0–1)
-  // Used when generating wild-type seeds
-  alleleFrequencies: Record<string, number>;
 
   // Growth lifecycle (in simulation ticks)
   growthTicks: {
@@ -124,6 +151,7 @@ export type PlantHealth = 'thriving' | 'healthy' | 'stressed' | 'wilting' | 'dyi
 export type PlantInstance = {
   id: string;
   speciesId: SpeciesId;
+  varietyId: VarietyId;
   genotype: Genotype;
   phenotype: Phenotype;
 
@@ -171,6 +199,7 @@ export type SeedRarity = 'common' | 'uncommon' | 'rare' | 'legendary';
 export type SeedItem = {
   id: string;
   speciesId: SpeciesId;
+  varietyId: VarietyId;
   genotype: Genotype;
   phenotype: Phenotype; // predicted expressed traits
   rarity: SeedRarity;
@@ -193,6 +222,22 @@ export type HarvestItem = {
   harvestedAt: number;
 };
 
+// ─── Variety Journal ──────────────────────────
+
+export type JournalEntry = {
+  varietyId: VarietyId;
+  speciesId: SpeciesId;
+  discoveredAt: number;      // timestamp first obtained
+  discoveredCount: number;   // how many times obtained
+  bestRarityScore: number;   // highest rarityScore seen for this variety
+  totalHarvested: number;    // cumulative harvest count
+};
+
+export type JournalState = {
+  entries: Record<string, JournalEntry>;
+  newDiscoveries: VarietyId[]; // varieties discovered since last check
+};
+
 // ─── Store Slices ─────────────────────────────
 
 export type GardenState = {
@@ -212,10 +257,21 @@ export type SettingsState = {
   notificationsEnabled: boolean;
   soundEnabled: boolean;
   tutorialComplete: boolean;
+  inventoryInitialised: boolean;
 };
 
 export type RootState = {
   garden: GardenState;
   inventory: InventoryState;
   settings: SettingsState;
+};
+
+// ─── Discovery Event ──────────────────────────
+
+export type DiscoveryEvent = {
+  type: 'new_variety';
+  varietyId: VarietyId;
+  speciesId: SpeciesId;
+  rarityScore: number;
+  timestamp: number;
 };

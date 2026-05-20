@@ -3,6 +3,7 @@
 // Tab navigator + foreground simulation loop
 // Phase 4: collects SimulationEvents, exposes
 //          harvest-ready badge on Garden tab
+// Phase 8: simulation events → push notifications
 // ─────────────────────────────────────────────
 
 import React, { useEffect, useRef, useCallback } from 'react';
@@ -11,29 +12,72 @@ import { Tabs } from 'expo-router';
 import { TabBar }              from '../../src/components/ui/TabBar';
 import { useGardenActions, useAppStore, useHarvestReadyPlants } from '../../src/store';
 import { GAME }                from '../../src/constants/theme';
+import { getVariety }          from '../../src/genetics/varieties';
+import { getSpecies }          from '../../src/genetics/species';
+import {
+  scheduleHarvestReadyNotification,
+  scheduleWaterCriticalNotification,
+  schedulePlantDiedNotification,
+} from '../../src/simulation/notifications';
 import type { SimulationEvent } from '../../src/simulation';
+
+// ─── Plant Name Helper ────────────────────────
+
+function getPlantLabel(plantId: string): string {
+  const state = useAppStore.getState();
+  const plant = state.plants[plantId];
+  if (!plant) return 'A plant';
+
+  let name = '';
+  try {
+    const vari = getVariety(plant.varietyId);
+    name = vari.displayName;
+  } catch {
+    name = getSpecies(plant.speciesId).displayName;
+  }
+  return `${name} ${getSpecies(plant.speciesId).displayName}`;
+}
 
 // ─── Simulation Loop ──────────────────────────
 // Runs a setInterval while the app is foregrounded.
 // Each interval fires one tick (scaled by simulationSpeed).
-// Events are collected but currently logged; Phase 8 will
-// wire them to push notifications.
+// Events are routed to push notifications when enabled.
 
 function SimulationLoop() {
   const { tickSimulation, setLastSimulatedAt } = useGardenActions();
   const simulationSpeed = useAppStore((s) => s.simulationSpeed);
+  const notificationsEnabled = useAppStore((s) => s.notificationsEnabled);
   const intervalRef     = useRef<ReturnType<typeof setInterval> | null>(null);
   const speedRef        = useRef(simulationSpeed);
+  const notifRef        = useRef(notificationsEnabled);
 
-  // Keep speedRef current without restarting the interval
+  // Keep refs current without restarting the interval
   useEffect(() => { speedRef.current = simulationSpeed; }, [simulationSpeed]);
+  useEffect(() => { notifRef.current = notificationsEnabled; }, [notificationsEnabled]);
 
   const runTick = useCallback(() => {
     const events: SimulationEvent[] = tickSimulation(speedRef.current);
     setLastSimulatedAt(Date.now());
 
-    // Phase 8: route events to notification service
-    // For now, log notable events in dev
+    // Route events to push notifications when enabled
+    if (notifRef.current) {
+      for (const event of events) {
+        const plantLabel = getPlantLabel(event.plantId);
+        switch (event.type) {
+          case 'harvest_ready':
+            scheduleHarvestReadyNotification(event.plantId, plantLabel);
+            break;
+          case 'water_critical':
+            scheduleWaterCriticalNotification(event.plantId, plantLabel);
+            break;
+          case 'plant_died':
+            schedulePlantDiedNotification(event.plantId, plantLabel);
+            break;
+        }
+      }
+    }
+
+    // Dev logging
     if (__DEV__) {
       events
         .filter((e) => e.type === 'harvest_ready' || e.type === 'plant_died')
@@ -87,7 +131,7 @@ export default function TabLayout() {
     <>
       <SimulationLoop />
       <Tabs
-        tabBar={(props) => <TabBar {...props} />}
+        tabBar={(props: any) => <TabBar {...props} />}
         screenOptions={{ headerShown: false }}
       >
         <Tabs.Screen name="garden"    options={{ title: 'Garden' }} />

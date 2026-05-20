@@ -1,15 +1,13 @@
 // ─────────────────────────────────────────────
 // src/components/ui/Card.tsx
-// Premium surface card with botanical design,
-// sophisticated shadows, elegant borders, and
-// visual hierarchy for indie game aesthetic
+// Surface card with botanical border treatment
 // ─────────────────────────────────────────────
 
 import React from 'react';
 import { View, ViewProps, StyleSheet } from 'react-native';
 import { COLORS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 
-type CardVariant = 'default' | 'raised' | 'inset' | 'highlight' | 'premium';
+type CardVariant = 'default' | 'raised' | 'inset' | 'highlight';
 
 type CardProps = ViewProps & {
   variant?: CardVariant;
@@ -38,15 +36,8 @@ const variantStyles: Record<CardVariant, object> = {
   highlight: {
     backgroundColor: COLORS.bg_surface,
     borderColor: COLORS.green_deep,
-    borderWidth: 1.5,
-    ...SHADOWS.glow_green,
-  },
-  premium: {
-    backgroundColor: COLORS.bg_raised,
-    borderColor: COLORS.green_bright,
     borderWidth: 1,
-    ...SHADOWS.md,
-    // Extra visual polish
+    ...SHADOWS.glow_green,
   },
 };
 

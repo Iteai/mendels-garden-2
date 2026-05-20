@@ -1,24 +1,21 @@
 // ─────────────────────────────────────────────
 // src/components/plants/TomatoPlant.tsx
 //
-// Premium plant SVG assembly.
+// Full Tomato SVG assembly.
 // Composes Stem, LeafSet, FlowerSet, FruitSet
 // based on PlantGeometry computed by geometryEngine.
-// Enhanced with premium visual effects.
 //
 // Render order (back → front):
-//   1. Atmospheric depth layer
-//   2. Soil layer with depth and texture (seed/sprout)
-//   3. Fruits (behind leaves when small)
-//   4. Stem + branches with gradients
-//   5. Leaves with veins and shading
-//   6. Flowers (on top of leaves)
-//   7. Harvest-ready glow aura
-//   8. Atmospheric edge highlight
+//   1. Soil crumbs (seed/sprout)
+//   2. Fruits (behind leaves when small)
+//   3. Stem + branches
+//   4. Leaves
+//   5. Flowers (on top of leaves)
+//   6. Harvest-ready glow ring
 // ─────────────────────────────────────────────
 
 import React from 'react';
-import { Defs, Svg, G, Ellipse, Circle, Line, Path, RadialGradient, Stop } from 'react-native-svg';
+import { Svg, G, Ellipse, Circle, Line, Path } from 'react-native-svg';
 import { Stem }      from './parts/Stem';
 import { LeafSet }   from './parts/Leaf';
 import { FlowerSet } from './parts/Flower';
@@ -26,172 +23,79 @@ import { FruitSet }  from './parts/Fruit';
 import type { PlantGeometry } from './types';
 
 // ─── Soil Layer ───────────────────────────────
-// Enhanced with depth, shadow, and realistic texture
+// Visible for seed and sprout stages only.
 
 function SoilLayer({ cx, baseY, palette }: {
   cx: number; baseY: number; palette: PlantGeometry['palette'];
 }) {
-  const soilGradId = 'soilGrad';
-  
   return (
     <G>
-      <Defs>
-        {/* Soil gradient for depth */}
-        <RadialGradient
-          id={soilGradId}
-          cx="50%"
-          cy="30%"
-          r="60%"
-        >
-          <Stop offset="0%" stopColor={palette.stemDark} stopOpacity="0.3" />
-          <Stop offset="100%" stopColor={palette.stemDark} stopOpacity="0.15" />
-        </RadialGradient>
-      </Defs>
-
-      {/* Soil mound shadow */}
-      <Ellipse
-        cx={cx}
-        cy={baseY + 0.5}
-        rx={20}
-        ry={5}
-        fill={palette.stemDark}
-        opacity={0.2}
-      />
-
-      {/* Soil mound main */}
+      {/* Soil mound */}
       <Ellipse
         cx={cx}
         cy={baseY}
         rx={18}
-        ry={4.5}
-        fill={`url(#${soilGradId})`}
-        opacity={0.45}
-      />
-
-      {/* Soil texture — top edge highlight */}
-      <Ellipse
-        cx={cx}
-        cy={baseY - 1.2}
-        rx={16}
-        ry={1.5}
+        ry={4}
         fill={palette.stemDark}
-        opacity={0.15}
+        opacity={0.35}
       />
-
-      {/* Soil crumbs — multiple layers for realism */}
-      {[
-        { dx: -8, dy: -0.5, r: 1.2 },
-        { dx: 5, dy: 0.8, r: 0.9 },
-        { dx: -2, dy: 0.2, r: 0.7 },
-        { dx: 10, dy: -0.8, r: 0.8 },
-        { dx: -12, dy: 0.5, r: 0.6 },
-        { dx: 2, dy: -1, r: 0.85 },
-      ].map((crumb, i) => (
-        <G key={i}>
-          {/* Crumb shadow */}
-          <Circle
-            cx={cx + crumb.dx + 0.15}
-            cy={baseY + crumb.dy + 0.2}
-            r={crumb.r}
-            fill={palette.stemDark}
-            opacity={0.15}
-          />
-          {/* Crumb main */}
-          <Circle
-            cx={cx + crumb.dx}
-            cy={baseY + crumb.dy}
-            r={crumb.r}
-            fill={palette.stemDark}
-            opacity={0.4}
-          />
-        </G>
+      {/* Soil texture dots */}
+      {[[-6, -1], [4, 1], [-1, 0], [8, -1], [-10, 1]].map(([dx, dy], i) => (
+        <Circle
+          key={i}
+          cx={cx + dx}
+          cy={baseY + dy}
+          r={0.9}
+          fill={palette.stemDark}
+          opacity={0.4}
+        />
       ))}
     </G>
   );
 }
 
-// ─── Enhanced Seed Shape ───────────────────────
-// Premium botanical seed with texture and highlights
+// ─── Seed shape ───────────────────────────────
 
-function SeedShape({ geom, palette }: { geom: NonNullable<PlantGeometry['seedEllipse']>; palette: PlantGeometry['palette'] }) {
-  const seedGradId = 'seedGrad';
-  
+function SeedShape({ geom }: { geom: NonNullable<PlantGeometry['seedEllipse']>; palette: PlantGeometry['palette'] }) {
   return (
     <G>
-      <Defs>
-        {/* Seed gradient for volume */}
-        <RadialGradient
-          id={seedGradId}
-          cx="40%"
-          cy="40%"
-          r="60%"
-        >
-          <Stop offset="0%" stopColor="hsl(35, 35%, 45%)" stopOpacity="0.9" />
-          <Stop offset="100%" stopColor="hsl(30, 38%, 25%)" stopOpacity="1" />
-        </RadialGradient>
-      </Defs>
-
-      {/* Seed shadow */}
-      <Ellipse
-        cx={geom.cx + 0.2}
-        cy={geom.cy + 0.2}
-        rx={geom.rx}
-        ry={geom.ry}
-        fill="hsl(30, 35%, 15%)"
-        transform={`rotate(${geom.rotation}, ${geom.cx}, ${geom.cy})`}
-        opacity={0.25}
-      />
-
       {/* Seed body */}
       <Ellipse
         cx={geom.cx}
         cy={geom.cy}
         rx={geom.rx}
         ry={geom.ry}
-        fill={`url(#${seedGradId})`}
+        fill="hsl(30, 38%, 28%)"
         transform={`rotate(${geom.rotation}, ${geom.cx}, ${geom.cy})`}
       />
-
-      {/* Seed seam line (botanical detail) */}
+      {/* Seed seam line */}
       <Line
-        x1={geom.cx - geom.rx * 0.65}
+        x1={geom.cx - geom.rx * 0.6}
         y1={geom.cy}
-        x2={geom.cx + geom.rx * 0.65}
+        x2={geom.cx + geom.rx * 0.6}
         y2={geom.cy}
-        stroke="hsl(30, 25%, 35%)"
-        strokeWidth={0.65}
+        stroke="hsl(30, 25%, 40%)"
+        strokeWidth={0.6}
         strokeLinecap="round"
         transform={`rotate(${geom.rotation}, ${geom.cx}, ${geom.cy})`}
-        opacity={0.7}
+        opacity={0.6}
       />
-
-      {/* Seed highlight — wet look */}
+      {/* Seed highlight */}
       <Ellipse
-        cx={geom.cx - geom.rx * 0.28}
-        cy={geom.cy - geom.ry * 0.28}
-        rx={geom.rx * 0.32}
-        ry={geom.ry * 0.32}
-        fill="hsl(38, 40%, 55%)"
+        cx={geom.cx - geom.rx * 0.25}
+        cy={geom.cy - geom.ry * 0.25}
+        rx={geom.rx * 0.3}
+        ry={geom.ry * 0.3}
+        fill="hsl(35, 30%, 50%)"
         transform={`rotate(${geom.rotation}, ${geom.cx}, ${geom.cy})`}
-        opacity={0.55}
-      />
-
-      {/* Secondary highlight for dimension */}
-      <Ellipse
-        cx={geom.cx + geom.rx * 0.15}
-        cy={geom.cy - geom.ry * 0.15}
-        rx={geom.rx * 0.2}
-        ry={geom.ry * 0.2}
-        fill="hsl(40, 45%, 60%)"
-        transform={`rotate(${geom.rotation}, ${geom.cx}, ${geom.cy})`}
-        opacity={0.35}
+        opacity={0.45}
       />
     </G>
   );
 }
 
-// ─── Premium Cotyledons ────────────────────────
-// Seed leaves with gradients and detail
+// ─── Sprout cotyledons ────────────────────────
+// Round seed-leaves, different from true leaves
 
 function Cotyledons({ geom, palette }: {
   geom: NonNullable<PlantGeometry['cotyledons']>;
@@ -200,7 +104,7 @@ function Cotyledons({ geom, palette }: {
   return (
     <>
       {geom.map((leaf, i) => {
-        // Cotyledons are rounder than true leaves
+        // Cotyledons are rounder than true leaves — use an ellipse
         const L = leaf.length * 0.8;
         const W = leaf.width * 1.1;
         const path = [
@@ -212,50 +116,17 @@ function Cotyledons({ geom, palette }: {
           `  ${(L*0.2).toFixed(1)} ${(W*0.7).toFixed(1)},`,
           `0 0 Z`,
         ].join(' ');
-        
-        const cotylGradId = `cotylGrad_${i}`;
-        
         return (
           <G
             key={i}
             transform={`translate(${leaf.base.x.toFixed(1)}, ${leaf.base.y.toFixed(1)}) rotate(${leaf.rotation})`}
           >
-            <Defs>
-              <RadialGradient
-                id={cotylGradId}
-                cx="30%"
-                cy="30%"
-                r="70%"
-              >
-                <Stop offset="0%" stopColor={palette.leaf} stopOpacity="0.7" />
-                <Stop offset="100%" stopColor={palette.leafDark} stopOpacity="0.8" />
-              </RadialGradient>
-            </Defs>
-            
-            {/* Shadow */}
             <Path
               d={path}
-              fill={palette.leafDark}
-              opacity={0.15}
-              transform="translate(0.1, 0.1)"
-            />
-            
-            {/* Main body */}
-            <Path
-              d={path}
-              fill={`url(#${cotylGradId})`}
+              fill={palette.leaf}
               stroke={palette.leafDark}
               strokeWidth={0.4}
-              opacity={0.9}
-            />
-            
-            {/* Edge highlight */}
-            <Path
-              d={path}
-              fill="none"
-              stroke={palette.leaf}
-              strokeWidth={0.2}
-              opacity={0.25}
+              opacity={0.85}
             />
           </G>
         );
@@ -264,61 +135,34 @@ function Cotyledons({ geom, palette }: {
   );
 }
 
-// ─── Harvest-Ready Glow Aura ────────────────────
-// Premium glowing effect for harvestable plants
+// ─── Harvest glow ring ────────────────────────
 
 function HarvestGlow({ cx, cy, r }: { cx: number; cy: number; r: number }) {
-  const glowId = 'harvestGlow';
-  
   return (
     <>
-      <Defs>
-        <RadialGradient
-          id={glowId}
-          cx="50%"
-          cy="50%"
-          r="50%"
-        >
-          <Stop offset="0%" stopColor="hsl(65, 90%, 60%)" stopOpacity="0.3" />
-          <Stop offset="100%" stopColor="hsl(65, 90%, 60%)" stopOpacity="0" />
-        </RadialGradient>
-      </Defs>
-      
-      {/* Outer glow aura */}
-      <Circle
-        cx={cx}
-        cy={cy}
-        r={r + 5}
-        fill={`url(#${glowId})`}
-        opacity={0.6}
-      />
-      
-      {/* Inner glow ring */}
       <Circle
         cx={cx}
         cy={cy}
         r={r}
         fill="none"
         stroke="hsl(65, 90%, 60%)"
-        strokeWidth={1.2}
-        opacity={0.50}
+        strokeWidth={1.5}
+        opacity={0.40}
       />
-      
-      {/* Outer subtle ring */}
       <Circle
         cx={cx}
         cy={cy}
-        r={r + 2.5}
+        r={r + 3}
         fill="none"
         stroke="hsl(65, 85%, 55%)"
-        strokeWidth={0.6}
-        opacity={0.25}
+        strokeWidth={0.7}
+        opacity={0.20}
       />
     </>
   );
 }
 
-// ─── Main Component ───────────────────────────
+// ─── Main component ───────────────────────────
 
 type TomatoPlantProps = {
   geometry: PlantGeometry;

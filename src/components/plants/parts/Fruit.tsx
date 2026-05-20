@@ -1,21 +1,18 @@
 // ─────────────────────────────────────────────
 // src/components/plants/parts/Fruit.tsx
-// Premium fruit rendering with realistic volume,
-// complex shading, multiple highlight layers,
-// and sophisticated depth effects.
+// Tomato fruit: layered circles simulating volume
 //
-// Layered rendering (back to front):
-//   1. Soft shadow cast
-//   2. Main fruit body with radial gradient
-//   3. Subsurface scattering hint
-//   4. Sheen arc (reflected light)
-//   5. Multiple highlight dots (wet look)
-//   6. Stem nub with texture
-//   7. Calyx details (harvest_ready only)
+// Layers (back to front):
+//   1. Shadow circle    — dark, full radius, slight offset down-right
+//   2. Main body circle — primary fruit colour
+//   3. Sheen arc        — lighter crescent, upper-left
+//   4. Highlight dot    — small bright spot
+//   5. Stem nub         — short line at top
+//   6. Calyx tips       — tiny star points (harvest_ready only)
 // ─────────────────────────────────────────────
 
 import React from 'react';
-import { Defs, G, Circle, Line, Path, RadialGradient, LinearGradient, Stop } from 'react-native-svg';
+import { G, Circle, Line, Path } from 'react-native-svg';
 import type { FruitGeometry, PlantColorPalette } from '../types';
 
 type FruitProps = {
@@ -23,46 +20,34 @@ type FruitProps = {
   palette: PlantColorPalette;
   harvestReady?: boolean;
   opacity?: number;
-  index?: number;
 };
 
-export function Fruit({ fruit, palette, harvestReady = false, opacity = 1, index = 0 }: FruitProps) {
+export function Fruit({ fruit, palette, harvestReady = false, opacity = 1 }: FruitProps) {
   const { center, radius: r } = fruit;
   const { x: cx, y: cy } = center;
 
-  // Unique gradient IDs
-  const fruitGradId = `fruitGrad_${index}`;
-  const glowGradId = `glowGrad_${index}`;
-  const sheenGradId = `sheenGrad_${index}`;
+  // Highlight position: upper-left of centre
+  const hlX = cx - r * 0.30;
+  const hlY = cy - r * 0.30;
 
-  // ── POSITION CALCULATIONS ────────────────────
-
-  // Primary highlight: upper-left
-  const hlX = cx - r * 0.32;
-  const hlY = cy - r * 0.35;
-
-  // Secondary highlights for wet appearance
-  const hl2X = cx + r * 0.20;
-  const hl2Y = cy - r * 0.18;
-
-  // Sheen arc (reflected light on upper surface)
-  const sheenR = r * 0.68;
+  // Sheen arc path (upper-left crescent)
+  const sheenR = r * 0.72;
   const sheenPath = `
-    M ${(cx - sheenR * 0.65).toFixed(1)} ${(cy - sheenR * 0.50).toFixed(1)}
-    A ${sheenR.toFixed(1)} ${sheenR.toFixed(1)} 0 0 1
-      ${(cx + sheenR * 0.20).toFixed(1)} ${(cy - sheenR * 0.70).toFixed(1)}
+    M ${(cx - sheenR * 0.6).toFixed(1)} ${(cy - sheenR * 0.55).toFixed(1)}
+    A ${sheenR} ${sheenR} 0 0 1
+      ${(cx + sheenR * 0.0).toFixed(1)} ${(cy - sheenR * 0.72).toFixed(1)}
   `;
 
-  // Calyx star (only on harvest-ready fruits)
+  // Calyx (star tips at top when harvest-ready)
   const calyxTipCount = 5;
-  const calyxInner = r * 0.20;
-  const calyxOuter = r * 0.42;
-  const calyxBaseY = cy - r - 0.5;
+  const calyxInner    = r * 0.18;
+  const calyxOuter    = r * 0.38;
+  const calyxBaseY    = cy - r;
 
   function calyxTip(i: number) {
     const angle = (i * 72 - 90) * (Math.PI / 180);
     const tx = cx + Math.cos(angle) * calyxOuter;
-    const ty = calyxBaseY + Math.sin(angle) * calyxOuter * 0.5;
+    const ty = calyxBaseY + Math.sin(angle) * calyxOuter * 0.4;
     const bx = cx + Math.cos(angle + Math.PI / calyxTipCount) * calyxInner;
     const by = calyxBaseY + Math.sin(angle + Math.PI / calyxTipCount) * calyxInner;
     return `${i === 0 ? 'M' : 'L'} ${tx.toFixed(1)} ${ty.toFixed(1)} L ${bx.toFixed(1)} ${by.toFixed(1)}`;
@@ -70,118 +55,43 @@ export function Fruit({ fruit, palette, harvestReady = false, opacity = 1, index
 
   return (
     <G opacity={opacity}>
-      <Defs>
-        {/* Main fruit radial gradient: volumetric sphere effect */}
-        <RadialGradient
-          id={fruitGradId}
-          cx="35%"
-          cy="35%"
-          r="65%"
-        >
-          {/* Light side (lit) */}
-          <Stop offset="0%" stopColor={palette.fruit} stopOpacity="0.95" />
-          {/* Mid tone */}
-          <Stop offset="40%" stopColor={palette.fruit} stopOpacity="1" />
-          {/* Shadow side (darker, more saturated) */}
-          <Stop offset="100%" stopColor={palette.fruitDark} stopOpacity="0.85" />
-        </RadialGradient>
-
-        {/* Glow effect for harvest-ready fruits */}
-        <RadialGradient
-          id={glowGradId}
-          cx="50%"
-          cy="50%"
-          r="50%"
-        >
-          <Stop offset="0%" stopColor={palette.fruit} stopOpacity="0.1" />
-          <Stop offset="100%" stopColor={palette.fruitDark} stopOpacity="0.04" />
-        </RadialGradient>
-
-        {/* Sheen gradient for realistic wet look */}
-        <LinearGradient
-          id={sheenGradId}
-          x1="0%"
-          y1="0%"
-          x2="100%"
-          y2="100%"
-        >
-          <Stop offset="0%" stopColor={palette.fruitHighlight} stopOpacity="0.7" />
-          <Stop offset="50%" stopColor={palette.fruitHighlight} stopOpacity="0.35" />
-          <Stop offset="100%" stopColor={palette.fruit} stopOpacity="0" />
-        </LinearGradient>
-      </Defs>
-
-      {/* 1. Soft cast shadow for depth */}
+      {/* 1. Drop shadow */}
       <Circle
-        cx={cx + r * 0.12}
-        cy={cy + r * 0.15}
+        cx={cx + r * 0.08}
+        cy={cy + r * 0.08}
         r={r}
         fill={palette.fruitDark}
-        opacity={0.18}
+        opacity={0.35}
       />
 
-      {/* 2. Subsurface scattering hint (soft glow under skin) */}
-      {harvestReady && (
-        <Circle
-          cx={cx}
-          cy={cy}
-          r={r + 0.8}
-          fill={`url(#${glowGradId})`}
-          opacity={0.6}
-        />
-      )}
-
-      {/* 3. Main fruit body with volumetric gradient */}
+      {/* 2. Main body */}
       <Circle
         cx={cx}
         cy={cy}
         r={r}
-        fill={`url(#${fruitGradId})`}
-        opacity={0.98}
+        fill={palette.fruit}
       />
 
-      {/* 4. Specular highlight — wet, glossy appearance */}
-      {/* Upper-left primary highlight */}
-      <Circle
-        cx={hlX}
-        cy={hlY}
-        r={r * 0.24}
-        fill={palette.fruitHighlight}
-        opacity={0.75}
-      />
-
-      {/* Secondary highlight for additional dimension */}
-      <Circle
-        cx={hl2X}
-        cy={hl2Y}
-        r={r * 0.15}
-        fill={palette.fruitHighlight}
+      {/* 3. Sheen arc */}
+      <Path
+        d={sheenPath}
+        stroke={palette.fruitHighlight}
+        strokeWidth={r * 0.28}
+        fill="none"
+        strokeLinecap="round"
         opacity={0.55}
       />
 
-      {/* 5. Sheen arc — reflected light on surface */}
-      <Path
-        d={sheenPath}
-        stroke={`url(#${sheenGradId})`}
-        strokeWidth={r * 0.26}
-        fill="none"
-        strokeLinecap="round"
-        opacity={0.65}
+      {/* 4. Highlight dot */}
+      <Circle
+        cx={hlX}
+        cy={hlY}
+        r={r * 0.22}
+        fill={palette.fruitHighlight}
+        opacity={0.70}
       />
 
-      {/* 6. Stem nub — attachment point to plant */}
-      {/* Stem shadow */}
-      <Line
-        x1={cx + 0.1}
-        y1={cy - r + 0.1}
-        x2={cx + r * 0.18 + 0.1}
-        y2={cy - r - r * 0.35 + 0.1}
-        stroke={palette.fruitDark}
-        strokeWidth={r * 0.20}
-        strokeLinecap="round"
-        opacity={0.25}
-      />
-      {/* Main stem */}
+      {/* 5. Stem nub */}
       <Line
         x1={cx}
         y1={cy - r}
@@ -190,39 +100,16 @@ export function Fruit({ fruit, palette, harvestReady = false, opacity = 1, index
         stroke={palette.fruitStem}
         strokeWidth={r * 0.18}
         strokeLinecap="round"
-        opacity={0.85}
       />
 
-      {/* 7. Calyx star — tiny leaf-like details at harvest */}
+      {/* 6. Calyx star (harvest-ready glow) */}
       {harvestReady && (
-        <G>
-          {/* Calyx shadow */}
-          <Path
-            d={Array.from({ length: calyxTipCount }, (_, i) => calyxTip(i)).join(' ') + ' Z'}
-            fill={palette.stem}
-            opacity={0.4}
-            transform={`translate(0.15, 0.15)`}
-          />
-          {/* Calyx highlight */}
-          <Path
-            d={Array.from({ length: calyxTipCount }, (_, i) => calyxTip(i)).join(' ') + ' Z'}
-            fill={palette.stem}
-            opacity={0.85}
-          />
-        </G>
+        <Path
+          d={Array.from({ length: calyxTipCount }, (_, i) => calyxTip(i)).join(' ') + ' Z'}
+          fill={palette.stem}
+          opacity={0.75}
+        />
       )}
-
-      {/* 8. Subtle edge darkening for realism */}
-      <Circle
-        cx={cx}
-        cy={cy}
-        r={r}
-        fill="none"
-        stroke={palette.fruitDark}
-        strokeWidth={0.3}
-        opacity={0.2}
-        strokeLinecap="round"
-      />
     </G>
   );
 }
@@ -246,7 +133,6 @@ export function FruitSet({ fruits, palette, harvestReady }: FruitSetProps) {
           fruit={fr}
           palette={palette}
           harvestReady={harvestReady}
-          index={i}
         />
       ))}
     </>

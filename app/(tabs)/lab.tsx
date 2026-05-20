@@ -24,10 +24,10 @@ import {
   FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ScreenShell, AppText, Card, Badge } from '../../src/components/ui';
+import { ScreenShell, AppText, Card, Badge, SeedCompareModal } from '../../src/components/ui';
+import { asIconName } from '../../src/utils/formatters';
 import {
   useSeeds,
-  useInventoryActions,
   useAppStore,
 } from '../../src/store';
 import {
@@ -38,10 +38,10 @@ import {
 } from '../../src/constants/theme';
 import type { SeedItem } from '../../src/types';
 import {
-  breedSeeds,
   previewBreed,
   type PhenotypePreview,
 } from '../../src/genetics';
+import { useGameActions, BREED_COST, type BreedResult } from '../../src/game';
 
 // ─── Helpers ──────────────────────────────────
 
@@ -347,7 +347,7 @@ function BreedResultModal({ visible, seeds, mutationEvents, onClose }: BreedResu
 // ─── Main Screen ──────────────────────────────
 
 export default function LabScreen() {
-  const { addSeedBatch } = useInventoryActions();
+  const { breedFromInventory } = useGameActions();
 
   const [parentA, setParentA] = useState<SeedItem | null>(null);
   const [parentB, setParentB] = useState<SeedItem | null>(null);
@@ -364,35 +364,37 @@ export default function LabScreen() {
       .filter((p) => PREVIEW_TRAITS.includes(p.trait));
   }, [parentA, parentB]);
 
+  // Compare modal state
+  const [showCompare, setShowCompare] = useState(false);
+
   // ── Breed ─────────────────────────────────
   const handleBreed = useCallback(() => {
     if (!parentA || !parentB) return;
     setIsBreeding(true);
 
-    // Small timeout gives UI a chance to show loading state
     setTimeout(() => {
-      const result = breedSeeds({
-        parentA,
-        parentB,
-        offspringCount: 3,
-        mutationRate: 1.0,
-      });
+      const result = breedFromInventory(parentA.id, parentB.id);
 
-      const ids = addSeedBatch(result.seeds);
+      if (!result.ok) {
+        // Show error — currently just clear breeding state
+        console.warn('[Lab] Breed failed:', result.reason);
+        setIsBreeding(false);
+        return;
+      }
+
       const addedSeeds = useAppStore.getState().seeds;
-      const offspring = ids.map((id) => addedSeeds[id]).filter(Boolean) as SeedItem[];
+      const offspring = result.seedIds.map((id) => addedSeeds[id]).filter(Boolean) as SeedItem[];
 
       setResultSeeds(offspring);
       setResultMutations(result.mutationEvents);
       setShowResult(true);
       setIsBreeding(false);
     }, 300);
-  }, [parentA, parentB, addSeedBatch]);
+  }, [parentA, parentB, breedFromInventory]);
 
   // ── Species compatibility check ────────────
-  const compatible =
-    !parentA || !parentB || parentA.speciesId === parentB.speciesId;
-  const canBreed = !!parentA && !!parentB && compatible;
+  const canBreed = !!parentA && !!parentB;
+  const bothSelected = !!parentA && !!parentB;
 
   return (
     <ScreenShell title="Lab" subtitle="Genetics workbench">
@@ -421,12 +423,28 @@ export default function LabScreen() {
           />
         </View>
 
-        {/* Compatibility warning */}
-        {!compatible && (
+          {/* Compare button (visible when both parents selected) */}
+        {bothSelected && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.compareBtn,
+              pressed && { opacity: 0.7 },
+            ]}
+            onPress={() => setShowCompare(true)}
+          >
+            <Ionicons name="analytics-outline" size={14} color={COLORS.text_secondary} />
+            <AppText variant="caption" color="secondary">
+              Compare Parents
+            </AppText>
+          </Pressable>
+        )}
+
+        {/* Cross-species breeding indicator */}
+        {parentA && parentB && parentA.speciesId !== parentB.speciesId && (
           <View style={styles.warningRow}>
-            <Ionicons name="warning-outline" size={14} color={COLORS.status_wilting} />
-            <AppText variant="caption" style={{ color: COLORS.status_wilting }}>
-              Cross-species breeding not yet available
+            <Ionicons name="flask-outline" size={14} color={COLORS.rarity_legendary} />
+            <AppText variant="caption" style={{ color: COLORS.rarity_legendary }}>
+              Cross-species hybrid! Offspring species determined by VIGOR dominance.
             </AppText>
           </View>
         )}
@@ -450,7 +468,7 @@ export default function LabScreen() {
             variant="label"
             style={{ color: canBreed ? COLORS.text_accent : COLORS.text_muted }}
           >
-            {isBreeding ? 'Breeding…' : canBreed ? 'Breed · 3 offspring' : 'Select both parents'}
+            {isBreeding ? 'Breeding…' : canBreed ? `Breed · 3 offspring · ${BREED_COST} ✦` : 'Select both parents'}
           </AppText>
         </Pressable>
       </Card>
@@ -472,6 +490,7 @@ export default function LabScreen() {
 
       {/* ── How It Works (shown when no parents selected) ── */}
       {!parentA && !parentB && <HowItWorksSection />}
+      {parentA && parentB && parentA.speciesId !== parentB.speciesId && <CrossSpeciesGuide />}
 
       {/* ── Seed Picker Modal ── */}
       <SeedPickerModal
@@ -485,10 +504,20 @@ export default function LabScreen() {
         visible={pickerTarget === 'B'}
         title="Select Parent B"
         excludeId={parentA?.id}
-        filterSpecies={parentA?.speciesId ?? null}
+        filterSpecies={null} // Allow any species — cross-breeding enabled!
         onSelect={setParentB}
         onClose={() => setPickerTarget(null)}
       />
+
+      {/* ── Seed Compare Modal ── */}
+      {parentA && parentB && (
+        <SeedCompareModal
+          visible={showCompare}
+          seedA={parentA}
+          seedB={parentB}
+          onClose={() => setShowCompare(false)}
+        />
+      )}
 
       {/* ── Breed Result Modal ── */}
       <BreedResultModal
@@ -507,9 +536,37 @@ export default function LabScreen() {
 
 // ─── How It Works ─────────────────────────────
 
+function CrossSpeciesGuide() {
+  const steps = [
+    { icon: 'flask-outline',     text: 'You selected seeds from different species — hybridisation in progress!' },
+    { icon: 'trending-up-outline', text: 'Offspring species is determined by which parent has more dominant VIGOR alleles' },
+    { icon: 'color-palette-outline', text: 'Base traits are blended between both parent species' },
+    { icon: 'star-outline',      text: 'Cross-species hybrids earn a +10% rarity boost — they are unusual finds!' },
+    { icon: 'archive-outline',   text: 'All 3 offspring seeds are added to your inventory as usual' },
+  ];
+
+  return (
+    <View style={howStyles.section}>
+      <AppText variant="label" color="muted" style={howStyles.header}>
+        Cross-Species Breeding Guide
+      </AppText>
+      {steps.map((step, i) => (
+        <View key={i} style={howStyles.row}>
+          <View style={howStyles.iconBox}>
+            <Ionicons name={asIconName(step.icon)} size={15} color={COLORS.rarity_legendary} />
+          </View>
+          <AppText variant="caption" color="secondary" style={howStyles.text}>
+            {step.text}
+          </AppText>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function HowItWorksSection() {
   const steps = [
-    { icon: 'leaf-outline',      text: 'Select two seeds of the same species as parents' },
+    { icon: 'leaf-outline',      text: 'Select two seeds (any species — cross-breeding allowed!)' },
     { icon: 'git-merge-outline', text: 'Each gene is inherited from one parent via Mendelian segregation' },
     { icon: 'flash-outline',     text: 'Rare mutations may flip individual alleles' },
     { icon: 'star-outline',      text: 'Offspring with unusual allele combinations score higher rarity' },
@@ -524,7 +581,7 @@ function HowItWorksSection() {
       {steps.map((step, i) => (
         <View key={i} style={howStyles.row}>
           <View style={howStyles.iconBox}>
-            <Ionicons name={step.icon as any} size={15} color={COLORS.green_primary} />
+            <Ionicons name={asIconName(step.icon)} size={15} color={COLORS.green_primary} />
           </View>
           <AppText variant="caption" color="secondary" style={howStyles.text}>
             {step.text}
@@ -578,6 +635,18 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border_subtle,
     backgroundColor: COLORS.bg_deep,
     opacity: 0.55,
+  },
+  compareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING['2'],
+    paddingVertical: SPACING['2'],
+    marginBottom: SPACING['2'],
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border_subtle,
+    backgroundColor: COLORS.bg_deep,
   },
   breedBtnActive: {
     opacity: 1,
