@@ -75,7 +75,8 @@ function SimulationLoop() {
   }, [tickSimulation, setLastSimulatedAt]);
 
   useEffect(() => {
-    intervalRef.current = setInterval(runTick, GAME.SIMULATION_INTERVAL_MS);
+    const safeInterval = Math.max(1000, GAME.SIMULATION_INTERVAL_MS || 5000);
+    intervalRef.current = setInterval(runTick, safeInterval);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
