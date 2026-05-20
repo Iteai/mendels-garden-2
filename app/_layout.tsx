@@ -23,6 +23,8 @@ import {
   type PersistedState,
 } from '../src/store/persistence';
 import { initNotifications } from '../src/simulation/notifications';
+import { useFonts } from 'expo-font';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 // ─── App Initialiser ─────────────────────────
 // Runs once on mount:
@@ -146,6 +148,13 @@ function AppInitialiser() {
 // ─── Root Layout ──────────────────────────────
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    ...Ionicons.font,
+  });
+
+  if (!fontsLoaded) {
+    return null;
+  }
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
