@@ -8,8 +8,14 @@ workflows:
       node: 18
       npm: 9
 
+    cache:
+      cache_paths:
+        - $HOME/.npm
+        - $HOME/.gradle/caches
+        - $HOME/.gradle/wrapper
+
     scripts:
-      - name: Download assets
+      - name: Download missing assets
         script: |
           mkdir -p assets
           curl -L -o assets/icon.png "https://dummyimage.com/1024x1024/1a2e1a/81c784.png"
@@ -19,23 +25,48 @@ workflows:
 
       - name: Install dependencies
         script: |
+          rm -rf node_modules
+          rm -f package-lock.json
+          npm cache clean --force
           npm install --legacy-peer-deps
+
+      - name: Fix AJV dependency mismatch
+        script: |
+          npm install --save-dev ajv@^8.17.1 ajv-keywords@^5.1.0 --legacy-peer-deps
+
+      - name: Check Expo dependencies
+        script: |
+          npx expo-doctor || true
 
       - name: Prebuild Android
         script: |
-          npx expo prebuild --platform android --clean
+          npx expo prebuild --platform android --clean --non-interactive
+
+      - name: Set Android SDK location
+        script: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
 
       - name: Build APK
         script: |
           cd android
+          chmod +x ./gradlew
           ./gradlew clean
           ./gradlew assembleRelease
 
       - name: Build AAB
         script: |
           cd android
+          chmod +x ./gradlew
           ./gradlew bundleRelease
 
     artifacts:
       - android/app/build/outputs/**/*.apk
       - android/app/build/outputs/**/*.aab
+
+    publishing:
+      email:
+        recipients:
+          - developer@example.com
+        notify:
+          success: true
+          failure: true
