@@ -1,3 +1,4 @@
+import 'react-native-gesture-handler';
 // ─────────────────────────────────────────────
 // app/_layout.tsx
 // Root layout — Expo Router entry point
@@ -103,8 +104,18 @@ function AppInitialiser() {
       // Phase 9: Chunked simulation prevents startup jank
       // Instead of simulating all 720+ ticks at once, process in batches
       const now = Date.now();
-      const elapsedMs = now - lastSimulatedAt;
-      const elapsedTicks = Math.floor((elapsedMs / 5000) * simulationSpeed);
+      
+      // FIX: Se è la prima installazione (0), non calcolare il tempo passato dal 1970!
+      let elapsedMs = 0;
+      if (lastSimulatedAt > 0) {
+        elapsedMs = now - lastSimulatedAt;
+      }
+      
+      // FIX: Limita i tick massimi a 1 giorno (circa 17280 tick) per evitare crash
+      let elapsedTicks = Math.floor((elapsedMs / 5000) * simulationSpeed);
+      if (elapsedTicks > 17280) {
+        elapsedTicks = 17280; 
+      }
 
       if (elapsedTicks > 0) {
         // Process ticks in chunks to yield to main thread
@@ -157,7 +168,7 @@ export default function RootLayout() {
   }
   return (
     <GestureHandlerRootView style={styles.root}>
-      <SafeAreaProvider>
+      <SafeAreaProvider style={{ flex: 1 }}>
         <StatusBar style="light" backgroundColor={COLORS.bg_deep} />
         <AppInitialiser />
         <Stack
