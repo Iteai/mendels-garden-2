@@ -84,8 +84,7 @@ workflows:
             --profile preview \
             --local \
             --output "$CM_BUILD_DIR/plant-genetics-debug.apk" \
-            --non-interactive \
-            --no-wait
+            --non-interactive
 
     artifacts:
       - $CM_BUILD_DIR/plant-genetics-debug.apk
