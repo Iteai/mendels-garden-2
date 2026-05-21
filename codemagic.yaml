@@ -22,6 +22,16 @@ workflows:
       - name: Expo Prebuild
         script: npx expo prebuild --platform android --clean
 
+      - name: Patch Kotlin version
+        script: |
+          if [ -f android/build.gradle ]; then
+            sed -i.bak "s/ext.kotlinVersion = '1.9.24'/ext.kotlinVersion = '1.9.25'/g" android/build.gradle || true
+            sed -i.bak "s/kotlinVersion = '1.9.24'/kotlinVersion = '1.9.25'/g" android/build.gradle || true
+          fi
+          if [ -f android/gradle/libs.versions.toml ]; then
+            sed -i.bak "s/kotlin = "1.9.24"/kotlin = "1.9.25"/g" android/gradle/libs.versions.toml || true
+          fi
+          
       - name: Build Android Debug APK
         script: |
           cd android
