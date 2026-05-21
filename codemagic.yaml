@@ -1,40 +1,13 @@
 workflows:
   android-workflow:
-    name: Android APK build
-    max_build_duration: 60
+    name: Android APK Build
+    max_build_duration: 120
 
     environment:
-      groups:
-        - Expo
-      node: 20.11.0
-      vars:
-        PACKAGE_NAME: com.plantgenetics.app
-        EAS_NO_VCS: "1"
-        EAS_LOCAL_BUILD_SKIP_CLEANUP: "1"
-        EAS_BUILD_DISABLE_EXPO_DOCTOR_STEP: "1"
-
-    triggering:
-      events:
-        - push
-      branch_patterns:
-        - pattern: develop
-          include: true
-        - pattern: main
-          include: true
-      cancel_previous_builds: true
+      node: 20
+      java: 17
 
     scripts:
-      - name: Set Node version
-        script: nvm use 20 || true
-
-      - name: Check Expo token
-        script: |
-          if [ -z "$EXPO_TOKEN" ]; then
-            echo "EXPO_TOKEN non impostato"
-            exit 1
-          fi
-          echo "EXPO_TOKEN presente"
-
       - name: Install dependencies
         script: npm install --legacy-peer-deps
 
@@ -46,34 +19,21 @@ workflows:
           curl -L -o assets/adaptive-icon.png "https://dummyimage.com/1024x1024/1a2e1a/81c784.png"
           curl -L -o assets/favicon.png "https://dummyimage.com/192x192/1a2e1a/81c784.png"
 
-      - name: Install EAS CLI
-        script: npm install -g eas-cli@latest
+      - name: Expo Prebuild
+        script: npx expo prebuild --platform android --clean
 
-      - name: Debug Expo config
+      - name: Build Android Debug APK
         script: |
-          set -x
-          export EXPO_DEBUG=1
-          node -v
-          npm -v
-          npx expo --version
-          echo "--- package.json ---"
-          cat package.json
-          echo "--- app.json ---"
-          cat app.json
-          echo "--- babel.config.js ---"
-          cat babel.config.js
-          echo "--- trying expo config ---"
-          npx expo config --type public
-          echo "--- trying expo config json ---"
-          npx expo config --json
+          cd android
+          ./gradlew assembleDebug
 
-      - name: Build APK (EAS local)
-        script: |
-          export EXPO_TOKEN="$EXPO_TOKEN"
-          export EAS_LOCAL_BUILD_WORKINGDIR="$CM_BUILD_DIR/eas-local-build"
-          eas build \
-            --platform android \
-            --profile preview \
-            --local \
-            --output "$CM_BUILD_DIR/plant-genetics-debug.apk" \
-            --non-interactive
+    artifacts:
+      - android/app/build/outputs/apk/debug/**/*.apk
+
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com
+        notify:
+          success: true
+          failure: true
