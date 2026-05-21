@@ -12,12 +12,8 @@
 //   - Breed cost validation
 // ─────────────────────────────────────────────
 
-import type { PlantInstance, SeedItem, GardenPlot, SeedRarity, SpeciesDefinition } from '../types';
-
-// ─── Constants ─────────────────────────────────
-
-/** Maximum number of living plants allowed in the garden */
-export const MAX_PLANTS = 300;
+import type { PlantInstance, SeedItem, GardenPlot, SeedRarity } from '../types';
+import type { SpeciesDefinition } from '../genetics/species';
 
 // ─── Harvest ──────────────────────────────────
 
@@ -45,7 +41,7 @@ export type YieldResult = {
  */
 export function calculateHarvest(
   plant:   PlantInstance,
-  _species: SpeciesDefinition, // reserved for species-specific modifiers
+  _species: SpeciesDefinition, // reserved for species-specific modifiers (Phase 6)
 ): YieldResult {
   const ph = plant.phenotype;
 
@@ -95,8 +91,7 @@ export type PlantingError =
   | 'plot_occupied'
   | 'plot_locked'
   | 'seed_not_found'
-  | 'seed_depleted'
-  | 'garden_full';
+  | 'seed_depleted';
 
 export type PlantingValidation =
   | { ok: true }
@@ -114,17 +109,6 @@ export function validatePlanting(
   return { ok: true };
 }
 
-/**
- * Check if the garden has reached maximum plant capacity.
- * Must be called from gameActions with store access (circular-safe).
- */
-export function isGardenFull(state: { plants: Record<string, PlantInstance> }): boolean {
-  const livingCount = Object.values(state.plants).filter(
-    (p) => p.growthStage !== 'dead',
-  ).length;
-  return livingCount >= MAX_PLANTS;
-}
-
 export function plantingErrorMessage(error: PlantingError): string {
   const messages: Record<PlantingError, string> = {
     plot_not_found: 'Plot not found.',
@@ -132,7 +116,6 @@ export function plantingErrorMessage(error: PlantingError): string {
     plot_locked:    'This plot is locked.',
     seed_not_found: 'Seed not found in inventory.',
     seed_depleted:  'No seeds of this type remaining.',
-    garden_full:    `Your garden is full (max ${MAX_PLANTS} plants). Compost dead plants first.`,
   };
   return messages[error];
 }
@@ -140,11 +123,16 @@ export function plantingErrorMessage(error: PlantingError): string {
 // ─── Breeding cost ────────────────────────────
 
 /** Spore cost to breed two seeds in the Lab */
-export const BREED_COST = 0;
+export const BREED_COST = 10;
 
 export type BreedValidation =
   | { ok: true }
   | { ok: false; reason: 'insufficient_currency' | 'incompatible_species' | 'missing_parent' };
+
+/** Whether two seeds are from different species families */
+export function isCrossFamily(parentA: SeedItem, parentB: SeedItem): boolean {
+  return parentA.speciesId.split('_')[0] !== parentB.speciesId.split('_')[0];
+}
 
 export function validateBreed(
   parentA:  SeedItem | null | undefined,
@@ -153,8 +141,6 @@ export function validateBreed(
 ): BreedValidation {
   if (!parentA || !parentB)
     return { ok: false, reason: 'missing_parent' };
-  if (parentA.speciesId !== parentB.speciesId)
-    return { ok: false, reason: 'incompatible_species' };
   if (currency < BREED_COST)
     return { ok: false, reason: 'insufficient_currency' };
   return { ok: true };

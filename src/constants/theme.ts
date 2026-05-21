@@ -62,6 +62,18 @@ export const COLORS = {
   border_subtle: '#2A341C',
   border_normal: '#3A4C24',
   border_strong: '#4A6030',
+
+  // ── Phase 7: Rarity Glow Overlays ─────────
+  glow_rare:      '#4A6EAA',
+  glow_legendary: '#C49A1A',
+  glow_uncommon:  '#4A8C1C',
+
+  // ── Phase 7: Soil texture ─────────────────
+  soil_texture:   '#1A2212',
+
+  // ── Phase 7: Journal ──────────────────────
+  journal_bg:     '#1A1E10',
+  journal_border: '#2D3A1A',
 } as const;
 
 export type ColorKey = keyof typeof COLORS;

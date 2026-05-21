@@ -4,7 +4,7 @@
 // Phase 2: genetics breakdown on seed tap
 // ─────────────────────────────────────────────
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -12,14 +12,14 @@ import {
   FlatList,
   Modal,
   ScrollView,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ScreenShell, AppText, Card, Badge, StatBar, VarietyJournal, DiscoveryToast } from '../../src/components/ui';
-import type { DiscoveryToastData } from '../../src/components/ui/DiscoveryToast';
-import { useSeeds, useHarvests, useTotalSeedCount, useJournalEntries, useJournalActions, useNewDiscoveries, useDiscoveredCount } from '../../src/store';
+import { ScreenShell, AppText, Card, Badge, StatBar } from '../../src/components/ui';
+import { useSeeds, useHarvests, useTotalSeedCount } from '../../src/store';
 import { useSeedGeneticsInfo, DISPLAY_TRAITS } from '../../src/store/useGenetics';
+import { getSpecies } from '../../src/genetics/species';
 import { COLORS, SPACING, RADIUS, TYPOGRAPHY } from '../../src/constants/theme';
-import { getVariety, VARIETY_REGISTRY } from '../../src/genetics/varieties';
 import type { SeedItem, HarvestItem } from '../../src/types';
 
 // ─── Helpers ──────────────────────────────────
@@ -29,16 +29,6 @@ function speciesLabel(id: string): string {
     tomato: 'Tomato', chili: 'Chili', basil: 'Basil', radish: 'Radish',
   };
   return map[id] ?? id;
-}
-
-function varietyName(varietyId: string | undefined): string {
-  if (!varietyId) return '';
-  try {
-    const v = getVariety(varietyId);
-    return v.displayName;
-  } catch {
-    return '';
-  }
 }
 
 function rarityBorderColor(rarity: SeedItem['rarity']): string {
@@ -110,8 +100,8 @@ function SeedCard({ seed, onPress }: { seed: SeedItem; onPress: () => void }) {
           <AppText style={styles.seedEmoji}>🌱</AppText>
         </View>
         <View style={styles.seedInfo}>
-          <AppText variant="subheading" color="primary" style={styles.seedName} numberOfLines={1}>
-            {varietyName(seed.varietyId) || speciesLabel(seed.speciesId)}
+          <AppText variant="subheading" color="primary" style={styles.seedName}>
+            {speciesLabel(seed.speciesId)}
           </AppText>
           <AppText variant="caption" color="muted">
             Gen {seed.generation} · ×{seed.quantity}
@@ -159,9 +149,7 @@ function SeedDetailModal({ seed, onClose }: { seed: SeedItem; onClose: () => voi
         {/* Header */}
         <View style={detailStyles.header}>
           <View>
-            <AppText variant="heading" color="primary">
-              {varietyName(seed.varietyId) || speciesLabel(seed.speciesId)}
-            </AppText>
+            <AppText variant="heading" color="primary">{speciesLabel(seed.speciesId)}</AppText>
             <AppText variant="caption" color="muted">
               Gen {seed.generation} · ×{seed.quantity} · {formatAgo(seed.obtainedAt)}
             </AppText>
@@ -307,75 +295,92 @@ function EmptyHarvestsState() {
   );
 }
 
+// ─── Filter Buttons ──────────────────────────
+
+const RARITY_FILTERS = ['all', 'common', 'uncommon', 'rare', 'legendary'] as const;
+type RarityFilter = typeof RARITY_FILTERS[number];
+
+function FamilyFilter({ selected, onChange }: {
+  selected: string | null;
+  onChange: (f: string | null) => void;
+}) {
+  const families = ['all', 'tomato', 'chili', 'basil', 'radish'];
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={filterStyles.scroll}>
+      {families.map((f) => (
+        <Pressable
+          key={f}
+          style={[
+            filterStyles.chip,
+            (selected === null && f === 'all') || selected === f ? filterStyles.chipActive : null,
+          ]}
+          onPress={() => onChange(f === 'all' ? null : f)}
+        >
+          <AppText
+            variant="label"
+            style={{
+              fontSize: 9,
+              color: (selected === null && f === 'all') || selected === f
+                ? COLORS.text_accent : COLORS.text_muted,
+            }}
+          >
+            {f.toUpperCase()}
+          </AppText>
+        </Pressable>
+      ))}
+    </ScrollView>
+  );
+}
+
+const filterStyles = StyleSheet.create({
+  scroll: { marginBottom: SPACING['2'] },
+  chip: {
+    paddingHorizontal: SPACING['2'],
+    paddingVertical: SPACING['1'],
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: COLORS.border_subtle,
+    backgroundColor: COLORS.bg_deep,
+    marginRight: SPACING['1'],
+  },
+  chipActive: {
+    borderColor: COLORS.green_deep,
+    backgroundColor: COLORS.bg_overlay,
+  },
+});
+
 // ─── Screen ───────────────────────────────────
 
 export default function InventoryScreen() {
   const [activeTab, setActiveTab]     = useState<InventoryTab>('seeds');
   const [selectedSeed, setSelectedSeed] = useState<SeedItem | null>(null);
-  const [showJournal, setShowJournal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [familyFilter, setFamilyFilter] = useState<string | null>(null);
 
-  const seeds         = useSeeds();
-  const harvests      = useHarvests();
-  const totalSeeds    = useTotalSeedCount();
-  const journalEntries = useJournalEntries();
-  const newDiscoveries = useNewDiscoveries();
-  const discoveredCount = useDiscoveredCount();
-  const { recordDiscovery, clearNewDiscoveries } = useJournalActions();
+  const seeds     = useSeeds();
+  const harvests  = useHarvests();
+  const totalSeeds = useTotalSeedCount();
 
-  // Track latest discovery for toast
-  const [discoveryToast, setDiscoveryToast] = useState<DiscoveryToastData | null>(null);
+  const seedList = useMemo(() => {
+    let list = Object.values(seeds);
 
-  // Record discoveries for new seeds
-  const totalVarieties = Object.keys(VARIETY_REGISTRY).length;
-
-  // Check for new discoveries on seed list change
-  const prevSeedsRef = React.useRef(seeds);
-  React.useEffect(() => {
-    const prev = prevSeedsRef.current;
-    const current = seeds;
-    // Check each current seed for new variety discovery
-    for (const seed of Object.values(current)) {
-      const hadIt = Object.values(prev).some((s) => s.varietyId === seed.varietyId);
-      if (!hadIt && seed.varietyId) {
-        const event = recordDiscovery({
-          varietyId: seed.varietyId,
-          speciesId: seed.speciesId,
-          rarityScore: seed.phenotype.rarityScore,
-          quantity: seed.quantity,
-        });
-        if (event) {
-          setDiscoveryToast({
-            varietyId: event.varietyId,
-            speciesId: event.speciesId,
-            rarityScore: event.rarityScore,
-          });
-        }
-      }
+    // Search filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter((s) => {
+        const name = s.speciesId.replace(/_/g, ' ').toLowerCase();
+        const family = s.speciesId.split('_')[0].toLowerCase();
+        return name.includes(q) || family.includes(q);
+      });
     }
-    prevSeedsRef.current = current;
-  }, [seeds, recordDiscovery]);
 
-  // Show toasts for pending new discoveries
-  React.useEffect(() => {
-    if (newDiscoveries.length > 0 && !discoveryToast) {
-      // Show first pending discovery
-      const vid = newDiscoveries[0];
-      const entry = journalEntries[vid];
-      if (entry) {
-        setDiscoveryToast({
-          varietyId: vid,
-          speciesId: entry.speciesId,
-          rarityScore: entry.bestRarityScore,
-        });
-      }
-      clearNewDiscoveries();
+    // Family filter
+    if (familyFilter) {
+      list = list.filter((s) => s.speciesId.startsWith(familyFilter));
     }
-  }, [newDiscoveries, discoveryToast, journalEntries, clearNewDiscoveries]);
 
-  const seedList = useMemo(() =>
-    Object.values(seeds).sort((a, b) => b.phenotype.rarityScore - a.phenotype.rarityScore),
-    [seeds],
-  );
+    return list.sort((a, b) => b.phenotype.rarityScore - a.phenotype.rarityScore);
+  }, [seeds, searchQuery, familyFilter]);
 
   const harvestList = useMemo(() =>
     Object.values(harvests).sort((a, b) => b.harvestedAt - a.harvestedAt),
@@ -384,33 +389,34 @@ export default function InventoryScreen() {
 
   return (
     <ScreenShell title="Seeds" subtitle="Your genetic library">
-      {/* Discovery Toast */}
-      <DiscoveryToast
-        data={discoveryToast}
-        onDismiss={() => setDiscoveryToast(null)}
-      />
-
-      {/* Journal link */}
-      <Pressable
-        style={({ pressed }) => [
-          journalStyles.link,
-          pressed && { opacity: 0.7 },
-        ]}
-        onPress={() => setShowJournal(true)}
-      >
-        <Ionicons name="book-outline" size={16} color={COLORS.text_accent} />
-        <AppText variant="label" color="accent" style={journalStyles.linkText}>
-          Collection Journal ({discoveredCount}/{totalVarieties})
-        </AppText>
-        <Ionicons name="chevron-forward" size={12} color={COLORS.text_accent} />
-      </Pressable>
-
       <TabToggle
         active={activeTab}
         onChange={setActiveTab}
         seedCount={totalSeeds}
         harvestCount={harvestList.length}
       />
+
+      {/* Phase 7: Search + filter for seeds tab */}
+      {activeTab === 'seeds' && seedList.length > 0 && (
+        <>
+          <View style={styles.searchBar}>
+            <Ionicons name="search-outline" size={14} color={COLORS.text_muted} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search seeds..."
+              placeholderTextColor={COLORS.text_muted}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery.length > 0 && (
+              <Pressable onPress={() => setSearchQuery('')}>
+                <Ionicons name="close-circle" size={14} color={COLORS.text_muted} />
+              </Pressable>
+            )}
+          </View>
+          <FamilyFilter selected={familyFilter} onChange={setFamilyFilter} />
+        </>
+      )}
 
       <View style={styles.listContainer}>
         {activeTab === 'seeds' ? (
@@ -448,40 +454,32 @@ export default function InventoryScreen() {
           onClose={() => setSelectedSeed(null)}
         />
       )}
-
-      <VarietyJournal
-        visible={showJournal}
-        onClose={() => setShowJournal(false)}
-        journalEntries={journalEntries}
-        totalVarieties={totalVarieties}
-      />
     </ScreenShell>
   );
 }
 
-// ─── Journal link styles ──────────────────────
-
-const journalStyles = StyleSheet.create({
-  link: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING['2'],
-    paddingVertical: SPACING['2'],
-    paddingHorizontal: SPACING['4'],
-    marginBottom: SPACING['2'],
-    backgroundColor: COLORS.bg_surface,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.green_deep,
-  },
-  linkText: {
-    flex: 1,
-  },
-});
-
 // ─── Styles ───────────────────────────────────
 
 const styles = StyleSheet.create({
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING['2'],
+    backgroundColor: COLORS.bg_surface,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border_subtle,
+    paddingHorizontal: SPACING['3'],
+    paddingVertical: SPACING['1'],
+    marginBottom: SPACING['2'],
+  },
+  searchInput: {
+    flex: 1,
+    color: COLORS.text_primary,
+    fontSize: TYPOGRAPHY.size.sm,
+    paddingVertical: SPACING['1'],
+    outlineStyle: 'none',
+  },
   toggle: {
     flexDirection: 'row',
     backgroundColor: COLORS.bg_surface,

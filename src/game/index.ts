@@ -24,6 +24,7 @@ export {
   type PlantingValidation,
   type BreedValidation,
   type PlantingError,
+  isCrossFamily,
 } from './gameLoop';
 
 export {

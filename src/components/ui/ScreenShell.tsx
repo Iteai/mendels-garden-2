@@ -1,3 +1,8 @@
+// ─────────────────────────────────────────────
+// src/components/ui/ScreenShell.tsx
+// Safe-area aware screen wrapper with top header
+// ─────────────────────────────────────────────
+
 import React from 'react';
 import {
   View,
@@ -48,6 +53,7 @@ export function ScreenShell({
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
+      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <AppText variant="heading" color="primary">
@@ -59,36 +65,26 @@ export function ScreenShell({
             </AppText>
           ) : null}
         </View>
-
         <View style={styles.headerRight}>
           <CurrencyDisplay />
           {headerRight}
         </View>
       </View>
 
+      {/* Divider */}
       <View style={styles.divider} />
 
+      {/* Body */}
       {scrollable ? (
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingBottom: insets.bottom + 96 },
-          ]}
+          contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
         >
           {content}
         </ScrollView>
       ) : (
-        <View
-          style={[
-            styles.fill,
-            { paddingBottom: insets.bottom + 96 },
-          ]}
-        >
-          {content}
-        </View>
+        <View style={styles.fill}>{content}</View>
       )}
     </View>
   );
@@ -131,14 +127,12 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: SPACING['5'],
     paddingTop: SPACING['4'],
+    paddingBottom: SPACING['10'],
   },
   fill: {
     flex: 1,
     paddingHorizontal: SPACING['5'],
     paddingTop: SPACING['4'],
-  },
-  content: {
-    flexGrow: 1,
   },
   currencyPill: {
     backgroundColor: COLORS.bg_surface,

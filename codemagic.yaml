@@ -1,69 +1,113 @@
+# ─────────────────────────────────────────────
+# codemagic.yaml
+# Plant Genetics — Android Build Pipeline
+#
+# HOW TO USE (smartphone-friendly setup):
+#
+# 1. Push this repo to GitHub (via GitHub web/mobile editor)
+# 2. Sign up at codemagic.io and connect your GitHub repo
+# 3. In Codemagic → Teams → Global variables, add:
+#
+#    EXPO_TOKEN         Your Expo account token
+#                       Get it at: expo.dev/accounts/[you]/settings/access-tokens
+#
+#    DEVELOPER_EMAIL    Your email for build notifications
+#
+#    For RELEASE builds only (optional):
+#    ANDROID_KEYSTORE          Base64-encoded .jks keystore file
+#    ANDROID_KEYSTORE_PASSWORD Keystore password
+#    ANDROID_KEY_ALIAS         Key alias
+#    ANDROID_KEY_PASSWORD      Key password
+#
+# 4. Trigger builds:
+#    - Debug:   push to 'develop' or 'main' branch
+#    - Release: push a git tag matching 'v*' (e.g. v1.0.0)
+#
+# WORKFLOWS:
+#   android-debug    → APK for direct install / testing
+#   android-release  → signed AAB for Play Store
+# ─────────────────────────────────────────────
+
 workflows:
-  android-build:
-    name: Android Build
+
+  # ─── Debug APK ──────────────────────────────
+  # Produces an installable APK. Triggered on every
+  # push to develop or main. Fast — no signing needed.
+
+  android-debug:
+    name: Android Debug (APK)
+    instance_type: linux_x2
     max_build_duration: 60
-    instance_type: mac_mini_m1
 
     environment:
-      node: 18
-      npm: 9
+      node: 20.11.0
+      groups:
+        - expo_credentials      # must contain EXPO_TOKEN
+      vars:
+        PACKAGE_NAME: com.plantgenetics.app
+        EAS_NO_VCS: "1"         # run inside Codemagic without git VCS checks
 
-    cache:
-      cache_paths:
-        - $HOME/.npm
-        - $HOME/.gradle/caches
-        - $HOME/.gradle/wrapper
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: develop
+          include: true
+        - pattern: main
+          include: true
+      cancel_previous_builds: true
 
     scripts:
-      - name: Download missing assets
-        script: |
-          mkdir -p assets
-          curl -L -o assets/icon.png "https://dummyimage.com/1024x1024/1a2e1a/81c784.png"
-          curl -L -o assets/splash.png "https://dummyimage.com/1242x2436/1a2e1a/81c784.png"
-          curl -L -o assets/adaptive-icon.png "https://dummyimage.com/1024x1024/1a2e1a/81c784.png"
-          curl -L -o assets/favicon.png "https://dummyimage.com/192x192/1a2e1a/81c784.png"
+      - name: Set Node version
+        script: nvm use 20 || true
 
       - name: Install dependencies
-        script: |
-          rm -rf node_modules
-          npm install --legacy-peer-deps
+        script: npm ci
 
-      - name: Fix Expo dependencies
+      - name: Authenticate with Expo
         script: |
-          npx expo install --fix
+          npx expo login --non-interactive || true
+          echo "EXPO_TOKEN: ${EXPO_TOKEN:0:8}..."
 
-      - name: Prebuild Android
-        script: |
-          export NODE_ENV=production
-          npx expo prebuild --platform android --clean --non-interactive
+      - name: Install EAS CLI
+        script: npm install -g eas-cli@latest
 
-      - name: Set Android SDK location
+      - name: Configure EAS project
         script: |
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+          # Link to Expo project without interactive prompt
+          cat > eas.json << 'EASEOF'
+          {
+            "cli": { "version": ">= 7.0.0", "appVersionSource": "local" },
+            "build": {
+              "preview": {
+                "distribution": "internal",
+                "android": { "buildType": "apk", "gradleCommand": ":app:assembleRelease" }
+              },
+              "production": {
+                "android": { "buildType": "app-bundle" }
+              }
+            }
+          }
+          EASEOF
 
-      - name: Build APK
+      - name: Build APK (EAS local)
         script: |
-          export NODE_ENV=production
-          cd android
-          chmod +x ./gradlew
-          ./gradlew clean
-          ./gradlew assembleRelease -x lint
-
-      - name: Build AAB
-        script: |
-          export NODE_ENV=production
-          cd android
-          chmod +x ./gradlew
-          ./gradlew bundleRelease -x lint
+          eas build \
+            --platform android \
+            --profile preview \
+            --local \
+            --output "$CM_BUILD_DIR/plant-genetics-debug.apk" \
+            --non-interactive \
+            --no-wait
 
     artifacts:
-      - android/app/build/outputs/**/*.apk
-      - android/app/build/outputs/**/*.aab
+      - $CM_BUILD_DIR/plant-genetics-debug.apk
+      - $CM_BUILD_DIR/*.apk
 
     publishing:
       email:
         recipients:
-          - developer@example.com
+          - $DEVELOPER_EMAIL
         notify:
           success: true
           failure: true

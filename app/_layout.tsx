@@ -1,156 +1,96 @@
-import 'react-native-gesture-handler';
 // ─────────────────────────────────────────────
 // app/_layout.tsx
 // Root layout — Expo Router entry point
+// Phase 8: AsyncStorage restore + auto-save
 // ─────────────────────────────────────────────
 
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { COLORS } from '../src/constants/theme';
+import { COLORS, TYPOGRAPHY } from '../src/constants/theme';
 import {
   useAppStore,
   useGardenActions,
   useInventoryActions,
   useSettingsActions,
   useInventoryInitialised,
+  type AppStore,
 } from '../src/store';
 import {
-  loadSavedState,
-  subscribeAutosave,
-  type PersistedState,
+  loadGameState,
+  autoSaveMiddleware,
 } from '../src/store/persistence';
-import { initNotifications } from '../src/simulation/notifications';
-import { useFonts } from 'expo-font';
-import Ionicons from '@expo/vector-icons/Ionicons';
+
+// ─── Splash / Loading Screen ─────────────────
+
+function LoadingScreen() {
+  return (
+    <View style={loadingStyles.root}>
+      <Text style={loadingStyles.icon}>🌱</Text>
+      <Text style={loadingStyles.title}>Plant Genetics</Text>
+      <ActivityIndicator size="small" color={COLORS.green_bright} />
+      <Text style={loadingStyles.sub}>Loading your garden...</Text>
+    </View>
+  );
+}
+
+const loadingStyles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: COLORS.bg_deep,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  icon: {
+    fontSize: 48,
+  },
+  title: {
+    fontSize: TYPOGRAPHY.size['2xl'],
+    fontWeight: TYPOGRAPHY.weight.bold,
+    color: COLORS.text_accent,
+    letterSpacing: 2,
+  },
+  sub: {
+    fontSize: TYPOGRAPHY.size.sm,
+    color: COLORS.text_muted,
+  },
+});
 
 // ─── App Initialiser ─────────────────────────
-// Runs once on mount:
-//  1. Restore saved state (if any)
-//  2. Ensure garden plots exist
-//  3. Seed starting inventory on first launch
-//  4. Apply offline catch-up ticks
-//  5. Wire autosave
-//  6. Init notifications
+// Phase 8: tries AsyncStorage restore first,
+//           falls back to fresh initialisation.
 
 function AppInitialiser() {
   const { initGarden, tickSimulation, setLastSimulatedAt } = useGardenActions();
-  const { initStartingInventory, addSeed, addHarvest, addCurrency } = useInventoryActions();
-  const { setSimulationSpeed, setNotificationsEnabled, setSoundEnabled, completeTutorial, markInventoryInitialised } = useSettingsActions();
-  const { recordDiscovery } = useAppStore((s) => ({ recordDiscovery: s.recordDiscovery }));
+  const { initStartingInventory } = useInventoryActions();
+  const { markInventoryInitialised } = useSettingsActions();
 
   const lastSimulatedAt     = useAppStore((s) => s.lastSimulatedAt);
   const simulationSpeed     = useAppStore((s) => s.simulationSpeed);
   const inventoryInitialised = useInventoryInitialised();
 
   useEffect(() => {
-    let mounted = true;
+    // 1. Initialise garden grid (no-op if already exists)
+    initGarden();
 
-    async function initialise() {
-      // 0. Init notifications
-      await initNotifications();
-
-      // 1. Try to restore saved state
-      const savedState = await loadSavedState();
-
-      if (savedState) {
-        // Restore garden
-        const store = useAppStore.getState();
-        // We need to set garden, inventory, settings, and journal state
-        // Since Zustand doesn't have a batch setter, we do individual mutations
-
-        // Restore settings first
-        setSimulationSpeed(savedState.settings.simulationSpeed);
-        setNotificationsEnabled(savedState.settings.notificationsEnabled);
-        setSoundEnabled(savedState.settings.soundEnabled);
-        if (savedState.settings.tutorialComplete) completeTutorial();
-        if (savedState.settings.inventoryInitialised) markInventoryInitialised();
-
-        // Restore garden — rebuild plots and plants via internal state
-        // We do this by directly setting the garden slice
-        useAppStore.setState({
-          plots: savedState.garden.plots,
-          plants: savedState.garden.plants,
-        });
-
-        // Restore inventory
-        useAppStore.setState({
-          seeds: savedState.inventory.seeds,
-          harvests: savedState.inventory.harvests,
-          currency: savedState.inventory.currency,
-        });
-
-        // Restore journal
-        useAppStore.setState({
-          entries: savedState.journal.entries,
-          newDiscoveries: savedState.journal.newDiscoveries,
-        });
-      } else {
-        // No saved state — fresh start
-        // 2. Initialise garden grid (no-op if already exists)
-        initGarden();
-
-        // 3. Seed starting inventory on first ever launch
-        if (!inventoryInitialised) {
-          initStartingInventory();
-          markInventoryInitialised();
-        }
-      }
-
-      // 4. Offline catch-up simulation with chunking
-      // Phase 9: Chunked simulation prevents startup jank
-      // Instead of simulating all 720+ ticks at once, process in batches
-      const now = Date.now();
-      
-      // FIX: Se è la prima installazione (0), non calcolare il tempo passato dal 1970!
-      let elapsedMs = 0;
-      if (lastSimulatedAt > 0) {
-        elapsedMs = now - lastSimulatedAt;
-      }
-      
-      // FIX: Limita i tick massimi a 1 giorno (circa 17280 tick) per evitare crash
-      let elapsedTicks = Math.floor((elapsedMs / 5000) * simulationSpeed);
-      if (elapsedTicks > 17280) {
-        elapsedTicks = 17280; 
-      }
-
-      if (elapsedTicks > 0) {
-        // Process ticks in chunks to yield to main thread
-        const CHUNK_SIZE = 100; // Simulate 100 ticks per chunk
-        let processedTicks = 0;
-
-        const processChunk = () => {
-          const remaining = elapsedTicks - processedTicks;
-          const chunkTicks = Math.min(CHUNK_SIZE, remaining);
-
-          if (chunkTicks > 0) {
-            tickSimulation(chunkTicks);
-            processedTicks += chunkTicks;
-
-            if (processedTicks < elapsedTicks) {
-              // Schedule next chunk on next event loop iteration
-              setTimeout(processChunk, 10);
-            }
-          }
-        };
-
-        processChunk();
-      }
-
-      setLastSimulatedAt(now);
-
-      // 5. Wire autosave (subscribes to store, writes debounced to AsyncStorage)
-      if (mounted) {
-        subscribeAutosave(useAppStore);
-      }
+    // 2. Seed starting inventory on first ever launch
+    if (!inventoryInitialised) {
+      initStartingInventory();
+      markInventoryInitialised();
     }
 
-    initialise();
-
-    return () => { mounted = false; };
+    // 3. Offline catch-up simulation
+    const now = Date.now();
+    const elapsedMs = now - lastSimulatedAt;
+    const elapsedTicks = Math.floor((elapsedMs / 5000) * simulationSpeed);
+    if (elapsedTicks > 0) {
+      tickSimulation(elapsedTicks);
+    }
+    setLastSimulatedAt(now);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return null;
@@ -159,36 +99,67 @@ function AppInitialiser() {
 // ─── Root Layout ──────────────────────────────
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
-    ...Ionicons.font,
-  });
+  const [ready, setReady] = useState(false);
 
-  if (!fontsLoaded) {
-    return null;
+  useEffect(() => {
+    async function bootstrap() {
+      try {
+        // 1. Try to restore saved state from AsyncStorage
+        const savedState = await loadGameState();
+
+        if (savedState) {
+          // Restore all slices in one batch
+          useAppStore.setState({
+            // Garden slice
+            plots: savedState.garden.plots,
+            plants: savedState.garden.plants,
+            lastSimulatedAt: savedState.garden.lastSimulatedAt,
+            // Inventory slice
+            seeds: savedState.inventory.seeds,
+            harvests: savedState.inventory.harvests,
+            currency: savedState.inventory.currency,
+            // Settings slice
+            simulationSpeed: savedState.settings.simulationSpeed,
+            notificationsEnabled: savedState.settings.notificationsEnabled,
+            soundEnabled: savedState.settings.soundEnabled,
+            tutorialComplete: savedState.settings.tutorialComplete,
+            inventoryInitialised: savedState.settings.inventoryInitialised,
+          });
+        }
+
+        // 2. Start auto-save middleware (debounced, throttled)
+        autoSaveMiddleware({
+          getState: () => useAppStore.getState() as any,
+          setState: () => {},
+          subscribe: useAppStore.subscribe,
+        });
+      } catch {
+        // Errors are logged inside loadGameState; proceed with fresh state
+      }
+
+      setReady(true);
+    }
+
+    bootstrap();
+  }, []);
+
+  if (!ready) {
+    return <LoadingScreen />;
   }
+
   return (
     <GestureHandlerRootView style={styles.root}>
-      <SafeAreaProvider style={{ flex: 1 }}>
+      <SafeAreaProvider>
         <StatusBar style="light" backgroundColor={COLORS.bg_deep} />
         <AppInitialiser />
         <Stack
           screenOptions={{
             headerShown: false,
             contentStyle: { backgroundColor: COLORS.bg_primary },
-            // FIX: On Android, 'fade' animation blocks tab bar gesture recognition
-            // Use 'default' or 'simple_push' which don't interfere with nested navigation
-            animation: Platform.OS === 'android' ? 'default' : 'fade',
-            gestureEnabled: true,
+            animation: 'fade',
           }}
         >
-          <Stack.Screen 
-            name="(tabs)" 
-            options={{ 
-              headerShown: false,
-              // Ensure Tabs navigation gets full gesture priority
-              gestureEnabled: true,
-            }} 
-          />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>

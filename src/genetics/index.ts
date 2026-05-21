@@ -24,14 +24,6 @@ export {
   getSpecies,
 } from './species';
 
-// Varieties
-export {
-  VARIETY_REGISTRY,
-  getVariety,
-  getVarietiesForSpecies,
-  getDefaultVariety,
-} from './varieties';
-
 // Genotype engine
 export {
   resolveExpression,
@@ -40,7 +32,6 @@ export {
   createWildTypeGenotype,
   createDominantGenotype,
   computePhenotype,
-  computeHybridPhenotype,
   getRarityBreakdown,
   applyMutation,
   describeGenotype,

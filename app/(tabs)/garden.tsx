@@ -15,20 +15,19 @@ import {
   Modal, ScrollView, FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ScreenShell, AppText, Card, Badge, StatBar, GrowthTimer, GrowthRing, VarietyJournal } from '../../src/components/ui';
+import { ScreenShell, AppText, Card, Badge, StatBar, GrowthTimer, RarityPulse, HarvestJournal } from '../../src/components/ui';
 import { PlantRenderer } from '../../src/components/plants';
-import { asIconName } from '../../src/utils/formatters';
 import {
   useGardenPlots, useGardenPlants, useOccupiedPlotCount,
   useGardenActions, useSeeds, useInventoryActions,
   usePlantsNeedingWater, useSimulationSpeed, useCurrency,
 } from '../../src/store';
 import {
-  useGameActions, canHarvest, canCompost, shouldWater, shouldFeed,
+  useGameActions, canHarvest, canCompost, shouldWater, shouldFeed, rarityFromScore,
   type HarvestSummary,
 } from '../../src/game';
 import { COLORS, SPACING, RADIUS, GAME, TYPOGRAPHY } from '../../src/constants/theme';
-import { getVariety } from '../../src/genetics/varieties';
+import { getSpecies } from '../../src/genetics/species';
 import type { GardenPlot, PlantInstance, SeedItem } from '../../src/types';
 
 // ─── Helpers ──────────────────────────────────
@@ -37,22 +36,8 @@ const CELL_SIZE  = 88;
 const PLANT_SIZE = 72;
 
 function speciesLabel(id: string): string {
-  return ({ tomato: 'Tomato', chili: 'Chili', basil: 'Basil', radish: 'Radish' } as Record<string,string>)[id] ?? id;
-}
-
-function varietyName(varietyId: string | undefined): string {
-  if (!varietyId) return '';
-  try {
-    const v = getVariety(varietyId);
-    return v.displayName;
-  } catch {
-    return '';
-  }
-}
-
-function plantLabel(plant: PlantInstance): string {
-  const vari = varietyName(plant.varietyId);
-  return vari ? `${vari} ${speciesLabel(plant.speciesId)}` : speciesLabel(plant.speciesId);
+  try { return getSpecies(id as any).displayName; }
+  catch { return id.replace(/_/g, ' '); }
 }
 
 function pct(v: number): string {
@@ -92,31 +77,34 @@ function OccupiedPlotCell({ plant, onPress }: {
 }) {
   const harvestReady = plant.growthStage === 'harvest_ready';
   const isDying      = plant.growthStage === 'dead' || plant.growthStage === 'decaying';
+  const rarity = rarityFromScore(plant.phenotype.rarityScore);
 
   return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.cell, styles.cellOccupied,
-        harvestReady && styles.cellHarvestReady,
-        isDying && styles.cellDying,
-        pressed && styles.cellPressed,
-      ]}
-      onPress={() => onPress(plant)}
-    >
-      <View style={[styles.healthDot, { backgroundColor: healthColor(plant.health) }]} />
-      <PlantRenderer plant={plant} width={PLANT_SIZE} height={PLANT_SIZE} />
-      <View style={styles.alertRow}>
-        {shouldWater(plant) && <Ionicons name="water" size={9} color={COLORS.rarity_rare} />}
-        {shouldFeed(plant)  && <Ionicons name="leaf"  size={9} color={COLORS.status_stressed} />}
-        {harvestReady       && <Ionicons name="star"  size={9} color={COLORS.rarity_legendary} />}
-        {isDying            && <Ionicons name="skull-outline" size={9} color={COLORS.text_muted} />}
-        {!shouldWater(plant) && !shouldFeed(plant) && !harvestReady && !isDying && (
-          <AppText style={styles.stageMicro}>
-            {plant.growthStage.slice(0, 4).toUpperCase()}
-          </AppText>
-        )}
-      </View>
-    </Pressable>
+    <RarityPulse rarity={rarity} size={CELL_SIZE}>
+      <Pressable
+        style={({ pressed }) => [
+          styles.cell, styles.cellOccupied,
+          harvestReady && styles.cellHarvestReady,
+          isDying && styles.cellDying,
+          pressed && styles.cellPressed,
+        ]}
+        onPress={() => onPress(plant)}
+      >
+        <View style={[styles.healthDot, { backgroundColor: healthColor(plant.health) }]} />
+        <PlantRenderer plant={plant} width={PLANT_SIZE} height={PLANT_SIZE} />
+        <View style={styles.alertRow}>
+          {shouldWater(plant) && <Ionicons name="water" size={9} color={COLORS.rarity_rare} />}
+          {shouldFeed(plant)  && <Ionicons name="leaf"  size={9} color={COLORS.status_stressed} />}
+          {harvestReady       && <Ionicons name="star"  size={9} color={COLORS.rarity_legendary} />}
+          {isDying            && <Ionicons name="skull-outline" size={9} color={COLORS.text_muted} />}
+          {!shouldWater(plant) && !shouldFeed(plant) && !harvestReady && !isDying && (
+            <AppText style={styles.stageMicro}>
+              {plant.growthStage.slice(0, 4).toUpperCase()}
+            </AppText>
+          )}
+        </View>
+      </Pressable>
+    </RarityPulse>
   );
 }
 
@@ -241,9 +229,7 @@ function SeedPickerModal({ plotId, visible, onClose }: {
                 </View>
                 <View style={modalStyles.seedInfo}>
                   <View style={modalStyles.seedTop}>
-                    <AppText variant="subheading" color="primary">
-                      {varietyName(seed.varietyId) || speciesLabel(seed.speciesId)}
-                    </AppText>
+                    <AppText variant="subheading" color="primary">{speciesLabel(seed.speciesId)}</AppText>
                     <Badge variant={seed.rarity} size="sm" />
                   </View>
                   <AppText variant="caption" color="muted">Gen {seed.generation} · ×{seed.quantity}</AppText>
@@ -303,7 +289,7 @@ function PlantActionSheet({ plant, visible, onClose, onHarvestDone }: {
               <PlantRenderer plant={plant} width={110} height={130} />
             </View>
             <View style={sheetStyles.previewInfo}>
-              <AppText variant="heading" color="primary">{plantLabel(plant)}</AppText>
+              <AppText variant="heading" color="primary">{speciesLabel(plant.speciesId)}</AppText>
               <View style={sheetStyles.badgeRow}>
                 <Badge variant={plant.growthStage} size="sm" />
                 <Badge variant={plant.health} size="sm" />
@@ -376,7 +362,7 @@ function ActionBtn({ icon, label, color, onPress, disabled, highlight }: {
       onPress={onPress}
       disabled={disabled}
     >
-      <Ionicons name={asIconName(icon)} size={20} color={disabled ? COLORS.text_muted : color} />
+      <Ionicons name={icon as any} size={20} color={disabled ? COLORS.text_muted : color} />
       <AppText variant="label" style={{ color: disabled ? COLORS.text_muted : color }}>{label}</AppText>
     </Pressable>
   );
@@ -435,14 +421,13 @@ export default function GardenScreen() {
   const [selectedPlotId, setSelectedPlotId] = useState<string | null>(null);
   const [activePlant,    setActivePlant]    = useState<PlantInstance | null>(null);
   const [harvestSummary, setHarvestSummary] = useState<HarvestSummary | null>(null);
-  const [showJournal, setShowJournal] = useState(false);
 
   const handleOccupied = useCallback((plant: PlantInstance) => {
     setActivePlant(plant);
   }, []);
 
   return (
-    <ScreenShell title="Garden" subtitle="Your growing plots" scrollable={false}>
+    <ScreenShell title="Garden" subtitle="Your growing plots" scrollable={true}>
       <GardenSummary />
       <View style={styles.divider} />
       <PlotGrid
@@ -458,6 +443,10 @@ export default function GardenScreen() {
           </AppText>
         </Card>
       )}
+
+      {/* Phase 7: Harvest Journal — collapsible history */}
+      <View style={styles.journalSpacer} />
+      <HarvestJournal />
 
       <SeedPickerModal
         plotId={selectedPlotId}
@@ -503,6 +492,7 @@ const styles = StyleSheet.create({
   stageMicro:      { fontSize: 7, color: COLORS.text_muted, fontWeight: '700', letterSpacing: 0.8 },
   hint:            { marginTop: SPACING['5'], alignItems: 'center', gap: SPACING['3'] },
   hintText:        { textAlign: 'center', maxWidth: 240, lineHeight: 22 },
+  journalSpacer:   { height: SPACING['5'] },
 });
 
 const modalStyles = StyleSheet.create({

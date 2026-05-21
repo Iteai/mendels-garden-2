@@ -52,7 +52,6 @@ export type GardenActions = {
   plantSeed:           (params: {
     plotId:     string;
     speciesId:  SpeciesId;
-    varietyId?: string;
     genotype:   Genotype;
     phenotype:  Phenotype;
     parentIds?: [string | null, string | null];
@@ -97,11 +96,9 @@ export const createGardenSlice: StateCreator<
     const now     = Date.now();
     const plantId = generatePlantId();
 
-    // Determine varietyId — either from the seed or default
     const newPlant: PlantInstance = {
       id:             plantId,
       speciesId,
-      varietyId:      '',
       genotype,
       phenotype,
       growthStage:    'seed',

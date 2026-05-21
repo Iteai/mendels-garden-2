@@ -1,75 +1,14 @@
 // ─────────────────────────────────────────────
 // src/components/plants/colorMapper.ts
-//
-// Maps Phenotype traits to a full HSL color palette.
-//
-// Color model:
-//   primaryColorShift  (-1..1) → ±60° rotation on fruit/flower hue
-//   secondaryColorShift(-1..1) → ±20° rotation on leaf/stem hue
-//   saturationBoost    (0..1)  → +0..40% saturation across all hues
-//   healthValue        (0..1)  → dims saturation when plant is stressed
-//
-// Phase 9: Added LRU cache for color palette computations
+// Phenotype + SpeciesDefinition → HSL palette
+// Supports fruitSaturationBase / fruitLightnessBase
+// overrides for unusual varieties (daikon, black radish)
 // ─────────────────────────────────────────────
 
 import type { Phenotype } from '../../types';
 import type { SpeciesDefinition } from '../../genetics/species';
 import type { PlantColorPalette } from './types';
 
-// ─── Color Palette Cache (LRU) ────────────────
-// Phase 9: Reduces recomputation for plants with similar phenotypes
-
-interface CacheEntry {
-  key: string;
-  palette: PlantColorPalette;
-  timestamp: number;
-}
-
-const CACHE_SIZE = 100;
-const CACHE_TTL = 60000; // 60 seconds (cache ttl to avoid stale results)
-
-let colorPaletteCache: CacheEntry[] = [];
-
-function getCacheKey(speciesId: string, phenotypeKey: string, healthBucket: number): string {
-  return `${speciesId}:${phenotypeKey}:${healthBucket}`;
-}
-
-function getPhenotypeKey(phenotype: Phenotype): string {
-  // Create a simple hash of phenotype values (round to 2 decimals to group similar phenotypes)
-  return [
-    Math.round(phenotype.primaryColorShift * 100),
-    Math.round(phenotype.secondaryColorShift * 100),
-    Math.round(phenotype.saturationBoost * 100),
-  ].join(',');
-}
-
-function getFromCache(key: string): PlantColorPalette | null {
-  const entry = colorPaletteCache.find((e) => e.key === key);
-  if (entry && Date.now() - entry.timestamp < CACHE_TTL) {
-    return entry.palette;
-  }
-  if (entry) {
-    // Remove stale entry
-    colorPaletteCache = colorPaletteCache.filter((e) => e.key !== key);
-  }
-  return null;
-}
-
-function addToCache(key: string, palette: PlantColorPalette): void {
-  // Remove oldest entry if cache is full
-  if (colorPaletteCache.length >= CACHE_SIZE) {
-    colorPaletteCache = colorPaletteCache.slice(1);
-  }
-  colorPaletteCache.push({ key, palette, timestamp: Date.now() });
-}
-
-// ─── Clear cache on demand ────────────────────
-
-export function clearColorPaletteCache(): void {
-  colorPaletteCache = [];
-}
-
-/** Build a CSS HSL string, clamping all values to valid ranges */
 function hsl(h: number, s: number, l: number): string {
   const hh = ((h % 360) + 360) % 360;
   const ss = Math.max(0, Math.min(100, s));
@@ -78,45 +17,16 @@ function hsl(h: number, s: number, l: number): string {
 }
 
 export function computeColorPalette(
-  phenotype: Phenotype,
-  species: SpeciesDefinition,
-  healthValue = 1.0,
-): PlantColorPalette {
-  // Phase 9: Check cache before computing
-  const healthBucket = Math.round(healthValue * 4);
-  const phenotypeKey = getPhenotypeKey(phenotype);
-  const cacheKey = getCacheKey(species.id, phenotypeKey, healthBucket);
-
-  const cached = getFromCache(cacheKey);
-  if (cached) {
-    return cached;
-  }
-
-  const palette = computeColorPaletteInternal(phenotype, species, healthValue);
-  addToCache(cacheKey, palette);
-  return palette;
-}
-
-/**
- * Internal implementation of color palette computation.
- * Separated from computeColorPalette to enable caching.
- */
-function computeColorPaletteInternal(
-  phenotype: Phenotype,
-  species: SpeciesDefinition,
-  healthValue = 1.0,
+  phenotype:   Phenotype,
+  species:     SpeciesDefinition,
+  healthValue  = 1.0,
 ): PlantColorPalette {
   const bh = species.baseHue;
 
-  // Trait-driven hue shifts
-  const primaryShift   = phenotype.primaryColorShift * 60;   // ±60°
-  const secondaryShift = phenotype.secondaryColorShift * 20; // ±20°
-
-  // Saturation base + boost
-  const satExtra = phenotype.saturationBoost * 35;
-
-  // Health dims everything toward grey — stressed plants look washed out
-  const healthFactor = 0.35 + healthValue * 0.65;
+  const primaryShift   = phenotype.primaryColorShift   * 60;
+  const secondaryShift = phenotype.secondaryColorShift * 20;
+  const satExtra       = phenotype.saturationBoost     * 35;
+  const healthFactor   = 0.35 + healthValue * 0.65;
 
   // ── Stem ──────────────────────────────────────
   const stemH = bh.stem + secondaryShift;
@@ -138,11 +48,14 @@ function computeColorPaletteInternal(
   const flowerCenter = hsl(flowerH + 18, Math.min(100, flowerS * 1.3), 54);
 
   // ── Fruit ─────────────────────────────────────
-  const fruitH = bh.fruit + primaryShift;
-  const fruitS = (52 + satExtra) * healthFactor;
-  const fruit          = hsl(fruitH, fruitS, 44);
-  const fruitDark      = hsl(fruitH - 4, fruitS * 0.8, 28);
-  const fruitHighlight = hsl(fruitH + 12, fruitS * 0.45, 72);
+  // Per-species overrides for unusual varieties
+  const fruitH  = bh.fruit + primaryShift;
+  const fruitSB = species.fruitSaturationBase ?? 52;
+  const fruitLB = species.fruitLightnessBase  ?? 44;
+  const fruitS  = (fruitSB + satExtra) * healthFactor;
+  const fruit          = hsl(fruitH, fruitS, fruitLB);
+  const fruitDark      = hsl(fruitH - 4, fruitS * 0.8, Math.max(8, fruitLB - 14));
+  const fruitHighlight = hsl(fruitH + 12, fruitS * 0.45, Math.min(92, fruitLB + 28));
   const fruitStem      = hsl(stemH, stemS * 0.8, 24);
 
   // ── Seed ──────────────────────────────────────

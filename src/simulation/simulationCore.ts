@@ -27,21 +27,30 @@ import type { SpeciesDefinition } from '../genetics/species';
 import { getSpecies } from '../genetics/species';
 
 // ─── Stage ordering ───────────────────────────
+// O(1) Map lookup instead of Array.indexOf for performance
+// during batch simulation (called on every tick per plant).
 
 const STAGE_ORDER: GrowthStage[] = [
   'seed', 'sprout', 'vegetative', 'flowering',
   'mature', 'harvest_ready', 'decaying', 'dead',
 ];
 
+const STAGE_INDEX_MAP = new Map<GrowthStage, number>(
+  STAGE_ORDER.map((s, i) => [s, i]),
+);
+
+const STAGE_NEXT_MAP = new Map<GrowthStage, GrowthStage>();
+for (let i = 0; i < STAGE_ORDER.length - 1; i++) {
+  STAGE_NEXT_MAP.set(STAGE_ORDER[i], STAGE_ORDER[i + 1]);
+}
+STAGE_NEXT_MAP.set('dead', 'dead');
+
 export function stageIndex(stage: GrowthStage): number {
-  return STAGE_ORDER.indexOf(stage);
+  return STAGE_INDEX_MAP.get(stage) ?? -1;
 }
 
 export function nextGrowthStage(stage: GrowthStage): GrowthStage {
-  const i = stageIndex(stage);
-  return i >= 0 && i < STAGE_ORDER.length - 1
-    ? STAGE_ORDER[i + 1]
-    : 'dead';
+  return STAGE_NEXT_MAP.get(stage) ?? 'dead';
 }
 
 // ─── Stage durations ──────────────────────────

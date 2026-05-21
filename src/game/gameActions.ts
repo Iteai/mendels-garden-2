@@ -49,7 +49,6 @@ export function plantFromInventory(seedId: string, plotId: string): PlantResult 
   const plant = state.plantSeed({
     plotId,
     speciesId:  seed.speciesId,
-    varietyId:  seed.varietyId,
     genotype:   seed.genotype,
     phenotype:  seed.phenotype,
     parentIds:  seed.parentIds,
@@ -103,7 +102,6 @@ export function harvestPlant(plantId: string): HarvestSummary | null {
   const seedRarity = rarityFromScore(plant.phenotype.rarityScore);
   state.addSeed({
     speciesId:  plant.speciesId,
-    varietyId:  plant.varietyId,
     genotype:   plant.genotype,
     phenotype:  plant.phenotype,
     rarity:     seedRarity,

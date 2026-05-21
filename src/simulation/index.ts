@@ -25,12 +25,3 @@ export {
   type AdvanceResult,
   type BatchResult,
 } from './simulationCore';
-
-export {
-  initNotifications,
-  scheduleHarvestReadyNotification,
-  scheduleWaterCriticalNotification,
-  schedulePlantDiedNotification,
-  cancelPlantNotifications,
-  getPendingNotificationCount,
-} from './notifications';

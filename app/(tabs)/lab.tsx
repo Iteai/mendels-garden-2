@@ -1,188 +1,127 @@
 // ─────────────────────────────────────────────
 // app/(tabs)/lab.tsx
-//
-// Genetics Lab — the breeding workbench.
-//
-// Flow:
-//   1. Player selects Parent A seed from inventory
-//   2. Player selects Parent B seed (same species)
-//   3. Preview panel shows expected offspring trait ranges
-//   4. Player presses Breed → offspring seeds added to inventory
-//   5. Result modal shows what was produced
-//
-// Phase 2: full genetics wiring.
-// Phase 5: seed consumption on breed.
+// Genetics Lab — full cross-family breeding
+// Phase 6: any two seeds can be crossed,
+//          including across species families
 // ─────────────────────────────────────────────
 
 import React, { useState, useCallback, useMemo } from 'react';
 import {
-  View,
-  ScrollView,
-  Pressable,
-  StyleSheet,
-  Modal,
-  FlatList,
+  View, ScrollView, Pressable, StyleSheet,
+  Modal, FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ScreenShell, AppText, Card, Badge, SeedCompareModal } from '../../src/components/ui';
-import { asIconName } from '../../src/utils/formatters';
-import {
-  useSeeds,
-  useAppStore,
-} from '../../src/store';
-import {
-  COLORS,
-  SPACING,
-  RADIUS,
-  TYPOGRAPHY,
-} from '../../src/constants/theme';
+import { ScreenShell, AppText, Card, Badge, TraitComparison } from '../../src/components/ui';
+import { PlantRenderer } from '../../src/components/plants';
+import { useSeeds, useInventoryActions, useAppStore } from '../../src/store';
+import { COLORS, SPACING, RADIUS, TYPOGRAPHY } from '../../src/constants/theme';
 import type { SeedItem } from '../../src/types';
-import {
-  previewBreed,
-  type PhenotypePreview,
-} from '../../src/genetics';
-import { useGameActions, BREED_COST, type BreedResult } from '../../src/game';
+import { previewBreed, type PhenotypePreview } from '../../src/genetics';
+import { useGameActions, BREED_COST, isCrossFamily } from '../../src/game';
+import { getSpecies } from '../../src/genetics/species';
 
 // ─── Helpers ──────────────────────────────────
 
-function speciesLabel(id: string): string {
-  const map: Record<string, string> = {
-    tomato: 'Tomato', chili: 'Chili', basil: 'Basil', radish: 'Radish',
-  };
-  return map[id] ?? id;
+function displayName(seed: SeedItem): string {
+  try { return getSpecies(seed.speciesId).displayName; }
+  catch { return seed.speciesId.replace(/_/g, ' '); }
 }
 
-function rarityColor(rarity: SeedItem['rarity']): string {
-  const map: Record<SeedItem['rarity'], string> = {
-    common:    COLORS.rarity_common,
-    uncommon:  COLORS.rarity_uncommon,
-    rare:      COLORS.rarity_rare,
-    legendary: COLORS.rarity_legendary,
-  };
-  return map[rarity];
+function familyLabel(id: string): string {
+  const f = id.split('_')[0];
+  return f.charAt(0).toUpperCase() + f.slice(1);
+}
+
+function rarityColor(r: SeedItem['rarity']): string {
+  return ({ common:COLORS.rarity_common, uncommon:COLORS.rarity_uncommon,
+            rare:COLORS.rarity_rare, legendary:COLORS.rarity_legendary } as Record<string,string>)[r] ?? COLORS.text_muted;
 }
 
 function formatTrait(key: string): string {
-  return key
-    .replace(/([A-Z])/g, ' $1')
-    .replace(/^./, (s) => s.toUpperCase())
-    .trim();
+  return key.replace(/([A-Z])/g,' $1').replace(/^./,s=>s.toUpperCase()).trim();
 }
 
-// Key traits to surface in the preview (the others are less visually significant)
-const PREVIEW_TRAITS = [
-  'heightFactor', 'growthRate', 'fruitSize',
-  'fruitCount', 'yieldMultiplier', 'waterEfficiency',
-  'primaryColorShift', 'rarityScore',
-];
+const PREVIEW_TRAITS = ['heightFactor','growthRate','fruitSize','fruitCount','yieldMultiplier','waterEfficiency','primaryColorShift','rarityScore'];
 
 // ─── Seed Picker Modal ────────────────────────
 
-type SeedPickerProps = {
-  visible: boolean;
-  title: string;
-  excludeId?: string | null;
-  filterSpecies?: string | null;
-  onSelect: (seed: SeedItem) => void;
-  onClose: () => void;
-};
-
-function SeedPickerModal({
-  visible, title, excludeId, filterSpecies, onSelect, onClose,
-}: SeedPickerProps) {
+function SeedPickerModal({ visible, title, excludeId, onSelect, onClose }: {
+  visible: boolean; title: string; excludeId?: string | null;
+  onSelect: (s: SeedItem) => void; onClose: () => void;
+}) {
   const seeds = useSeeds();
+  const [search, setSearch] = useState('');
 
   const list = useMemo(() => {
     return Object.values(seeds)
-      .filter((s) => {
-        if (s.id === excludeId) return false;
-        if (filterSpecies && s.speciesId !== filterSpecies) return false;
-        return s.quantity > 0;
-      })
+      .filter((s) => s.id !== excludeId && s.quantity > 0)
+      .filter((s) => !search || displayName(s).toLowerCase().includes(search.toLowerCase()))
       .sort((a, b) => b.phenotype.rarityScore - a.phenotype.rarityScore);
-  }, [seeds, excludeId, filterSpecies]);
+  }, [seeds, excludeId, search]);
+
+  // Group by family for display
+  const groups = useMemo(() => {
+    const g: Record<string, SeedItem[]> = {};
+    list.forEach((s) => {
+      const f = s.speciesId.split('_')[0];
+      if (!g[f]) g[f] = [];
+      g[f].push(s);
+    });
+    return g;
+  }, [list]);
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={pickerStyles.root}>
-        {/* Header */}
         <View style={pickerStyles.header}>
           <AppText variant="heading" color="primary">{title}</AppText>
           <Pressable onPress={onClose} style={pickerStyles.closeBtn}>
             <Ionicons name="close" size={22} color={COLORS.text_secondary} />
           </Pressable>
         </View>
-        {filterSpecies && (
-          <AppText variant="caption" color="muted" style={pickerStyles.filterNote}>
-            Showing {speciesLabel(filterSpecies)} seeds only
-          </AppText>
-        )}
+        <AppText variant="caption" color="muted" style={pickerStyles.note}>
+          All species can be crossed — even across families.
+        </AppText>
 
         {list.length === 0 ? (
-          <View style={pickerStyles.emptyState}>
+          <View style={pickerStyles.empty}>
             <Ionicons name="leaf-outline" size={40} color={COLORS.green_muted} />
-            <AppText variant="body" color="muted" style={pickerStyles.emptyText}>
-              {filterSpecies
-                ? `No other ${speciesLabel(filterSpecies)} seeds in inventory.`
-                : 'No seeds in inventory.'}
-            </AppText>
+            <AppText variant="body" color="muted" style={pickerStyles.emptyText}>No seeds available.</AppText>
           </View>
         ) : (
-          <FlatList
-            data={list}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={pickerStyles.list}
-            renderItem={({ item }) => (
-              <Pressable
-                style={({ pressed }) => [
-                  pickerStyles.seedRow,
-                  pressed && pickerStyles.seedRowPressed,
-                ]}
-                onPress={() => { onSelect(item); onClose(); }}
-              >
-                {/* Rarity stripe */}
-                <View
-                  style={[
-                    pickerStyles.rarityStripe,
-                    { backgroundColor: rarityColor(item.rarity) },
-                  ]}
-                />
-                <View style={pickerStyles.seedInfo}>
-                  <View style={pickerStyles.seedTopRow}>
-                    <AppText variant="subheading" color="primary">
-                      {speciesLabel(item.speciesId)}
-                    </AppText>
-                    <Badge variant={item.rarity} size="sm" />
-                  </View>
-                  <AppText variant="caption" color="muted">
-                    Gen {item.generation} · ×{item.quantity} available
-                  </AppText>
-                  <View style={pickerStyles.traitRow}>
-                    {['growthRate', 'fruitSize', 'yieldMultiplier'].map((t) => {
-                      const raw = item.phenotype[t as keyof typeof item.phenotype] as number;
-                      const pct = t === 'yieldMultiplier'
-                        ? Math.round((raw / 2) * 100)
-                        : Math.round(raw * 100);
-                      return (
-                        <View key={t} style={pickerStyles.miniStat}>
-                          <AppText variant="label" color="muted">{formatTrait(t).slice(0, 3).toUpperCase()}</AppText>
-                          <AppText variant="mono" style={{ color: pct > 60 ? COLORS.status_thriving : COLORS.text_secondary, fontSize: 11 }}>
-                            {pct}
-                          </AppText>
-                        </View>
-                      );
-                    })}
-                  </View>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={COLORS.text_muted} />
-              </Pressable>
-            )}
-          />
+          <ScrollView contentContainerStyle={pickerStyles.list}>
+            {Object.entries(groups).map(([family, seeds]) => (
+              <View key={family}>
+                <AppText variant="label" color="muted" style={pickerStyles.familyHeader}>
+                  {family.toUpperCase()} FAMILY
+                </AppText>
+                {seeds.map((seed) => (
+                  <Pressable
+                    key={seed.id}
+                    style={({ pressed }) => [pickerStyles.row, pressed && pickerStyles.rowPressed]}
+                    onPress={() => { onSelect(seed); onClose(); }}
+                  >
+                    <View style={[pickerStyles.stripe, { backgroundColor: rarityColor(seed.rarity) }]} />
+                    <View style={pickerStyles.preview}>
+                      <PlantRenderer speciesId={seed.speciesId} phenotype={seed.phenotype}
+                        stage="seed" health={1} width={44} height={44} />
+                    </View>
+                    <View style={pickerStyles.info}>
+                      <View style={pickerStyles.infoTop}>
+                        <AppText variant="subheading" color="primary">{displayName(seed)}</AppText>
+                        <Badge variant={seed.rarity} size="sm" />
+                      </View>
+                      <AppText variant="caption" color="muted">
+                        Gen {seed.generation} · ×{seed.quantity}
+                        {seed.isHybrid ? ' · Hybrid' : ''}
+                      </AppText>
+                    </View>
+                    <Ionicons name="chevron-forward" size={14} color={COLORS.text_muted} />
+                  </Pressable>
+                ))}
+              </View>
+            ))}
+          </ScrollView>
         )}
       </View>
     </Modal>
@@ -191,37 +130,29 @@ function SeedPickerModal({
 
 // ─── Parent Slot ──────────────────────────────
 
-type ParentSlotProps = {
-  label: string;
-  seed: SeedItem | null;
-  onPress: () => void;
-  onClear?: () => void;
-};
-
-function ParentSlot({ label, seed, onPress, onClear }: ParentSlotProps) {
+function ParentSlot({ label, seed, onPress, onClear }: {
+  label: string; seed: SeedItem | null;
+  onPress: () => void; onClear?: () => void;
+}) {
   return (
     <View style={slotStyles.wrapper}>
       <AppText variant="label" color="muted" style={slotStyles.label}>{label}</AppText>
       <Pressable
-        style={({ pressed }) => [
-          slotStyles.slot,
-          seed ? slotStyles.slotFilled : slotStyles.slotEmpty,
-          pressed && slotStyles.slotPressed,
-        ]}
+        style={({ pressed }) => [slotStyles.slot, seed ? slotStyles.filled : slotStyles.empty, pressed && { opacity: 0.7 }]}
         onPress={onPress}
       >
         {seed ? (
           <View style={slotStyles.filledContent}>
             <View style={[slotStyles.rarityDot, { backgroundColor: rarityColor(seed.rarity) }]} />
-            <AppText style={slotStyles.emoji}>🌱</AppText>
-            <AppText variant="caption" color="primary" numberOfLines={1}>{speciesLabel(seed.speciesId)}</AppText>
+            <PlantRenderer speciesId={seed.speciesId} phenotype={seed.phenotype}
+              stage="vegetative" health={1} width={64} height={72} />
+            <AppText variant="caption" color="primary" numberOfLines={1}>{displayName(seed)}</AppText>
             <Badge variant={seed.rarity} size="sm" />
-            <AppText variant="label" color="muted">Gen {seed.generation}</AppText>
           </View>
         ) : (
           <View style={slotStyles.emptyContent}>
             <Ionicons name="add-circle-outline" size={28} color={COLORS.green_muted} />
-            <AppText variant="caption" color="muted">Select seed</AppText>
+            <AppText variant="caption" color="muted">Any species</AppText>
           </View>
         )}
       </Pressable>
@@ -234,47 +165,47 @@ function ParentSlot({ label, seed, onPress, onClear }: ParentSlotProps) {
   );
 }
 
+// ─── Cross-family banner ──────────────────────
+
+function CrossFamilyBanner({ parentA, parentB }: { parentA: SeedItem; parentB: SeedItem }) {
+  const famA = familyLabel(parentA.speciesId);
+  const famB = familyLabel(parentB.speciesId);
+  return (
+    <View style={bannerStyles.container}>
+      <Ionicons name="flash" size={14} color={COLORS.rarity_legendary} />
+      <AppText variant="label" style={bannerStyles.text}>
+        Cross-family hybrid · {famA} × {famB}
+      </AppText>
+      <AppText variant="caption" style={bannerStyles.sub}>
+        Offspring inherit a family randomly · +18% rarity bonus
+      </AppText>
+    </View>
+  );
+}
+
 // ─── Trait Preview Bar ────────────────────────
 
-type TraitPreviewBarProps = { preview: PhenotypePreview };
-
-function TraitPreviewBar({ preview }: TraitPreviewBarProps) {
-  const isColorShift = preview.trait.includes('ColorShift');
-  const range = isColorShift ? [-1, 1] : preview.trait === 'yieldMultiplier' ? [0, 2] : [0, 1];
-  const span = range[1] - range[0];
-
-  // Normalise to 0–1 for bar width
-  const normalise = (v: number) => (v - range[0]) / span;
-  const minN  = normalise(preview.min);
-  const meanN = normalise(preview.mean);
-  const maxN  = normalise(preview.max);
-
-  const barColor = meanN > 0.65 ? COLORS.status_thriving
-    : meanN > 0.40 ? COLORS.status_stressed
-    : COLORS.status_dying;
+function TraitPreviewBar({ preview }: { preview: PhenotypePreview }) {
+  const isColor = preview.trait.includes('ColorShift');
+  const range   = isColor ? [-1,1] : preview.trait === 'yieldMultiplier' ? [0,2] : [0,1];
+  const span    = range[1] - range[0];
+  const norm    = (v: number) => (v - range[0]) / span;
+  const minN    = norm(preview.min);
+  const meanN   = norm(preview.mean);
+  const maxN    = norm(preview.max);
+  const barColor = meanN > 0.65 ? COLORS.status_thriving : meanN > 0.40 ? COLORS.status_stressed : COLORS.status_dying;
 
   return (
     <View style={previewStyles.row}>
-      <AppText variant="label" color="muted" style={previewStyles.traitLabel}>
-        {formatTrait(preview.trait).toUpperCase().slice(0, 6)}
+      <AppText variant="label" color="muted" style={previewStyles.label}>
+        {formatTrait(preview.trait).toUpperCase().slice(0,6)}
       </AppText>
-      {/* Track */}
       <View style={previewStyles.track}>
-        {/* Range band (min→max) */}
-        <View
-          style={[
-            previewStyles.rangeBand,
-            {
-              left: `${minN * 100}%`,
-              width: `${(maxN - minN) * 100}%`,
-            },
-          ]}
-        />
-        {/* Mean marker */}
-        <View style={[previewStyles.meanMarker, { left: `${meanN * 100}%` }]} />
+        <View style={[previewStyles.band, { left:`${minN*100}%`, width:`${(maxN-minN)*100}%` }]} />
+        <View style={[previewStyles.marker, { left:`${meanN*100}%` }]} />
       </View>
-      <AppText variant="mono" style={[previewStyles.meanVal, { color: barColor }]}>
-        {isColorShift
+      <AppText variant="mono" style={[previewStyles.val, { color: barColor }]}>
+        {isColor
           ? (preview.mean >= 0 ? `+${preview.mean.toFixed(1)}` : preview.mean.toFixed(1))
           : preview.trait === 'yieldMultiplier'
             ? `${preview.mean.toFixed(1)}×`
@@ -286,56 +217,47 @@ function TraitPreviewBar({ preview }: TraitPreviewBarProps) {
 
 // ─── Breed Result Modal ───────────────────────
 
-type BreedResultProps = {
-  visible: boolean;
-  seeds: SeedItem[];
-  mutationEvents: number;
-  onClose: () => void;
-};
-
-function BreedResultModal({ visible, seeds, mutationEvents, onClose }: BreedResultProps) {
+function BreedResultModal({ visible, seeds, mutations, crossFamily, onClose }: {
+  visible: boolean; seeds: SeedItem[]; mutations: number;
+  crossFamily: boolean; onClose: () => void;
+}) {
   return (
-    <Modal
-      visible={visible}
-      animationType="fade"
-      transparent
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <View style={resultStyles.overlay}>
         <View style={resultStyles.sheet}>
-          {/* Header */}
           <View style={resultStyles.header}>
-            <AppText variant="heading" color="accent">Breeding Complete</AppText>
-            {mutationEvents > 0 && (
+            <AppText variant="heading" color="accent">
+              {crossFamily ? '⚡ Hybrid Offspring' : 'Breeding Complete'}
+            </AppText>
+            {mutations > 0 && (
               <AppText variant="caption" color="terra">
-                ⚡ {mutationEvents} mutation{mutationEvents > 1 ? 's' : ''} occurred
+                {mutations} mutation{mutations > 1 ? 's' : ''} occurred
               </AppText>
             )}
           </View>
+          <AppText variant="label" color="muted">{seeds.length} new seeds added</AppText>
 
-          <AppText variant="label" color="muted" style={resultStyles.subLabel}>
-            New seeds added to inventory
-          </AppText>
-
-          {/* Offspring list */}
           {seeds.map((seed, i) => (
-            <View key={seed.id} style={resultStyles.offspringRow}>
-              <View style={[resultStyles.offspringIndex, { borderColor: rarityColor(seed.rarity) }]}>
-                <AppText variant="mono" color="muted">{i + 1}</AppText>
+            <View key={seed.id} style={resultStyles.row}>
+              <View style={[resultStyles.idx, { borderColor: rarityColor(seed.rarity) }]}>
+                <AppText variant="mono" color="muted">{i+1}</AppText>
               </View>
-              <View style={resultStyles.offspringInfo}>
-                <View style={resultStyles.offspringTopRow}>
-                  <AppText variant="body" color="primary">{speciesLabel(seed.speciesId)}</AppText>
+              <PlantRenderer speciesId={seed.speciesId} phenotype={seed.phenotype}
+                stage="seed" health={1} width={36} height={36} />
+              <View style={resultStyles.info}>
+                <View style={resultStyles.infoRow}>
+                  <AppText variant="body" color="primary">{displayName(seed)}</AppText>
                   <Badge variant={seed.rarity} />
                 </View>
                 <AppText variant="caption" color="muted">
-                  Gen {seed.generation} · Rarity {Math.round(seed.phenotype.rarityScore * 100)}%
+                  Gen {seed.generation} · Rarity {Math.round(seed.phenotype.rarityScore*100)}%
+                  {seed.isHybrid ? ' · Hybrid' : ''}
                 </AppText>
               </View>
             </View>
           ))}
 
-          <Pressable style={resultStyles.doneBtn} onPress={onClose}>
+          <Pressable style={resultStyles.btn} onPress={onClose}>
             <AppText variant="label" color="accent">Done</AppText>
           </Pressable>
         </View>
@@ -344,87 +266,170 @@ function BreedResultModal({ visible, seeds, mutationEvents, onClose }: BreedResu
   );
 }
 
+// ─── How it works ─────────────────────────────
+
+function HowItWorks() {
+  return (
+    <View style={howStyles.container}>
+      <AppText variant="label" color="muted" style={howStyles.heading}>How Breeding Works</AppText>
+      {[
+        { icon:'leaf-outline',      text:'Select any two seeds — same variety, different variety, or even different family' },
+        { icon:'git-merge-outline', text:'Each gene is inherited from one parent via Mendelian segregation' },
+        { icon:'flash-outline',     text:'Cross-family hybrids get a +18% rarity bonus and surprising trait combinations' },
+        { icon:'star-outline',      text:'Rare mutations may flip individual alleles during crossing' },
+        { icon:'archive-outline',   text:`3 offspring seeds produced for ${BREED_COST} ✦` },
+      ].map((s,i) => (
+        <View key={i} style={howStyles.row}>
+          <View style={howStyles.icon}><Ionicons name={s.icon as any} size={14} color={COLORS.green_primary} /></View>
+          <AppText variant="caption" color="secondary" style={howStyles.text}>{s.text}</AppText>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// ─── Main Screen ──────────────────────────────
+
+// ─── Compare Modal ───────────────────────────
+// Phase 7: side-by-side trait comparison of selected parents
+
+function CompareModal({ parentA, parentB, visible, onClose }: {
+  parentA: SeedItem; parentB: SeedItem;
+  visible: boolean; onClose: () => void;
+}) {
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={compareStyles.root}>
+        <View style={compareStyles.header}>
+          <AppText variant="heading" color="primary">Seed Comparison</AppText>
+          <Pressable onPress={onClose} style={compareStyles.closeBtn}>
+            <Ionicons name="close" size={22} color={COLORS.text_secondary} />
+          </Pressable>
+        </View>
+
+        <ScrollView contentContainerStyle={compareStyles.content}>
+          {/* Parent badges */}
+          <View style={compareStyles.badges}>
+            <View style={compareStyles.parentBadge}>
+              <View style={[compareStyles.badgeDot, { backgroundColor: rarityColor(parentA.rarity) }]} />
+              <AppText variant="label" color="primary">A: {displayName(parentA)}</AppText>
+              <Badge variant={parentA.rarity} size="sm" />
+            </View>
+            <AppText variant="label" color="muted" style={compareStyles.vs}>VS</AppText>
+            <View style={compareStyles.parentBadge}>
+              <View style={[compareStyles.badgeDot, { backgroundColor: rarityColor(parentB.rarity) }]} />
+              <AppText variant="label" color="primary">B: {displayName(parentB)}</AppText>
+              <Badge variant={parentB.rarity} size="sm" />
+            </View>
+          </View>
+
+          <AppText variant="caption" color="muted" style={compareStyles.note}>
+            Green = stronger parent · Terracotta = weaker · Ranked by higher-is-better traits
+          </AppText>
+
+          <Card variant="inset" padded={false}>
+            <View style={{ padding: SPACING['4'] }}>
+              <TraitComparison parentA={parentA} parentB={parentB} />
+            </View>
+          </Card>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
+const compareStyles = StyleSheet.create({
+  root:    { flex: 1, backgroundColor: COLORS.bg_primary },
+  header:  { flexDirection:'row', justifyContent:'space-between', alignItems:'center', paddingHorizontal:SPACING['5'], paddingTop:SPACING['5'], paddingBottom:SPACING['3'], borderBottomWidth:1, borderBottomColor:COLORS.border_subtle },
+  closeBtn:{ padding:SPACING['2'] },
+  content: { padding:SPACING['5'], gap:SPACING['4'], paddingBottom:SPACING['10'] },
+  badges:  { flexDirection:'row', alignItems:'center', justifyContent:'center', gap:SPACING['3'], flexWrap:'wrap' },
+  parentBadge:{ flexDirection:'row', alignItems:'center', gap:SPACING['2'], backgroundColor:COLORS.bg_surface, borderRadius:RADIUS.md, paddingHorizontal:SPACING['3'], paddingVertical:SPACING['2'], borderWidth:1, borderColor:COLORS.border_subtle },
+  badgeDot:{ width:8, height:8, borderRadius:RADIUS.full },
+  vs:      { fontSize:12, fontWeight:'700', color:COLORS.text_muted },
+  note:    { textAlign:'center', lineHeight:18, maxWidth:300, alignSelf:'center' },
+});
+
 // ─── Main Screen ──────────────────────────────
 
 export default function LabScreen() {
   const { breedFromInventory } = useGameActions();
-
-  const [parentA, setParentA] = useState<SeedItem | null>(null);
-  const [parentB, setParentB] = useState<SeedItem | null>(null);
+  const [parentA,      setParentA]      = useState<SeedItem | null>(null);
+  const [parentB,      setParentB]      = useState<SeedItem | null>(null);
   const [pickerTarget, setPickerTarget] = useState<'A' | 'B' | null>(null);
-  const [isBreeding, setIsBreeding] = useState(false);
-  const [resultSeeds, setResultSeeds] = useState<SeedItem[]>([]);
-  const [resultMutations, setResultMutations] = useState(0);
-  const [showResult, setShowResult] = useState(false);
+  const [isBreeding,   setIsBreeding]   = useState(false);
+  const [resultSeeds,  setResultSeeds]  = useState<SeedItem[]>([]);
+  const [resultMuts,   setResultMuts]   = useState(0);
+  const [showResult,   setShowResult]   = useState(false);
+  const [showCompare,  setShowCompare]  = useState(false);
 
-  // ── Preview (memoised — only recomputes when parents change) ──
+  const crossFam = !!(parentA && parentB && isCrossFamily(parentA, parentB));
+  const canBreed = !!(parentA && parentB);
+
   const preview = useMemo<PhenotypePreview[]>(() => {
     if (!parentA || !parentB) return [];
-    return previewBreed(parentA, parentB, 20)
-      .filter((p) => PREVIEW_TRAITS.includes(p.trait));
+    return previewBreed(parentA, parentB, 20).filter((p) => PREVIEW_TRAITS.includes(p.trait));
   }, [parentA, parentB]);
 
-  // Compare modal state
-  const [showCompare, setShowCompare] = useState(false);
-
-  // ── Breed ─────────────────────────────────
   const handleBreed = useCallback(() => {
     if (!parentA || !parentB) return;
     setIsBreeding(true);
-
     setTimeout(() => {
       const result = breedFromInventory(parentA.id, parentB.id);
-
-      if (!result.ok) {
-        // Show error — currently just clear breeding state
-        console.warn('[Lab] Breed failed:', result.reason);
-        setIsBreeding(false);
-        return;
-      }
-
+      if (!result.ok) { setIsBreeding(false); return; }
       const addedSeeds = useAppStore.getState().seeds;
-      const offspring = result.seedIds.map((id) => addedSeeds[id]).filter(Boolean) as SeedItem[];
-
+      const offspring  = result.seedIds.map((id) => addedSeeds[id]).filter(Boolean) as SeedItem[];
       setResultSeeds(offspring);
-      setResultMutations(result.mutationEvents);
+      setResultMuts(result.mutationEvents);
       setShowResult(true);
       setIsBreeding(false);
     }, 300);
   }, [parentA, parentB, breedFromInventory]);
 
-  // ── Species compatibility check ────────────
-  const canBreed = !!parentA && !!parentB;
-  const bothSelected = !!parentA && !!parentB;
-
   return (
     <ScreenShell title="Lab" subtitle="Genetics workbench">
 
-      {/* ── Breeding Station ── */}
+      {/* Parents */}
       <Card variant="raised" style={styles.section}>
-        <AppText variant="label" color="muted" style={styles.sectionHeader}>
-          Breeding Station
-        </AppText>
+        <AppText variant="label" color="muted" style={styles.sectionLabel}>Breeding Station</AppText>
 
-        <View style={styles.parentsRow}>
-          <ParentSlot
-            label="Parent A"
-            seed={parentA}
-            onPress={() => setPickerTarget('A')}
-            onClear={() => setParentA(null)}
-          />
-          <View style={styles.crossDivider}>
-            <AppText style={styles.crossGlyph}>×</AppText>
+        <View style={styles.parents}>
+          <ParentSlot label="Parent A" seed={parentA}
+            onPress={() => setPickerTarget('A')} onClear={() => setParentA(null)} />
+          <View style={styles.crossIcon}>
+            <AppText style={[styles.crossGlyph, crossFam && { color: COLORS.rarity_legendary }]}>×</AppText>
           </View>
-          <ParentSlot
-            label="Parent B"
-            seed={parentB}
-            onPress={() => setPickerTarget('B')}
-            onClear={() => setParentB(null)}
-          />
+          <ParentSlot label="Parent B" seed={parentB}
+            onPress={() => setPickerTarget('B')} onClear={() => setParentB(null)} />
         </View>
 
-          {/* Compare button (visible when both parents selected) */}
-        {bothSelected && (
+        {crossFam && parentA && parentB && (
+          <CrossFamilyBanner parentA={parentA} parentB={parentB} />
+        )}
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.breedBtn,
+            canBreed && styles.breedBtnActive,
+            crossFam && styles.breedBtnHybrid,
+            pressed && canBreed && { opacity: 0.75 },
+          ]}
+          onPress={handleBreed}
+          disabled={!canBreed || isBreeding}
+        >
+          <Ionicons name="git-merge-outline" size={18}
+            color={canBreed ? (crossFam ? COLORS.rarity_legendary : COLORS.text_accent) : COLORS.text_muted} />
+          <AppText variant="label" style={{
+            color: canBreed ? (crossFam ? COLORS.rarity_legendary : COLORS.text_accent) : COLORS.text_muted,
+          }}>
+            {isBreeding ? 'Breeding…' : canBreed
+              ? `${crossFam ? '⚡ Hybrid Breed' : 'Breed'} · 3 offspring · ${BREED_COST} ✦`
+              : 'Select two parent seeds'}
+          </AppText>
+        </Pressable>
+
+        {/* Phase 7: Compare button */}
+        {canBreed && (
           <Pressable
             style={({ pressed }) => [
               styles.compareBtn,
@@ -432,500 +437,117 @@ export default function LabScreen() {
             ]}
             onPress={() => setShowCompare(true)}
           >
-            <Ionicons name="analytics-outline" size={14} color={COLORS.text_secondary} />
-            <AppText variant="caption" color="secondary">
+            <Ionicons name="git-compare-outline" size={16} color={COLORS.rarity_rare} />
+            <AppText variant="caption" style={{ color: COLORS.rarity_rare }}>
               Compare Parents
             </AppText>
           </Pressable>
         )}
-
-        {/* Cross-species breeding indicator */}
-        {parentA && parentB && parentA.speciesId !== parentB.speciesId && (
-          <View style={styles.warningRow}>
-            <Ionicons name="flask-outline" size={14} color={COLORS.rarity_legendary} />
-            <AppText variant="caption" style={{ color: COLORS.rarity_legendary }}>
-              Cross-species hybrid! Offspring species determined by VIGOR dominance.
-            </AppText>
-          </View>
-        )}
-
-        {/* Breed button */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.breedBtn,
-            canBreed && styles.breedBtnActive,
-            pressed && canBreed && styles.breedBtnPressed,
-          ]}
-          onPress={handleBreed}
-          disabled={!canBreed || isBreeding}
-        >
-          <Ionicons
-            name="git-merge-outline"
-            size={18}
-            color={canBreed ? COLORS.text_accent : COLORS.text_muted}
-          />
-          <AppText
-            variant="label"
-            style={{ color: canBreed ? COLORS.text_accent : COLORS.text_muted }}
-          >
-            {isBreeding ? 'Breeding…' : canBreed ? `Breed · 3 offspring · ${BREED_COST} ✦` : 'Select both parents'}
-          </AppText>
-        </Pressable>
       </Card>
 
-      {/* ── Trait Preview ── */}
+      {/* Trait preview */}
       {preview.length > 0 && (
         <Card variant="inset" style={styles.section}>
-          <AppText variant="label" color="muted" style={styles.sectionHeader}>
-            Offspring Trait Preview
-          </AppText>
+          <AppText variant="label" color="muted" style={styles.sectionLabel}>Offspring Trait Preview</AppText>
           <AppText variant="caption" color="muted" style={styles.previewNote}>
-            Based on 20 simulated crosses · bar = expected range · marker = mean
+            20 simulated crosses · band = range · marker = mean
+            {crossFam ? ' · preview uses Parent A species' : ''}
           </AppText>
-          {preview.map((p) => (
-            <TraitPreviewBar key={p.trait} preview={p} />
-          ))}
+          {preview.map((p) => <TraitPreviewBar key={p.trait} preview={p} />)}
         </Card>
       )}
 
-      {/* ── How It Works (shown when no parents selected) ── */}
-      {!parentA && !parentB && <HowItWorksSection />}
-      {parentA && parentB && parentA.speciesId !== parentB.speciesId && <CrossSpeciesGuide />}
+      {!parentA && !parentB && <HowItWorks />}
 
-      {/* ── Seed Picker Modal ── */}
-      <SeedPickerModal
-        visible={pickerTarget === 'A'}
-        title="Select Parent A"
-        excludeId={parentB?.id}
-        onSelect={setParentA}
-        onClose={() => setPickerTarget(null)}
-      />
-      <SeedPickerModal
-        visible={pickerTarget === 'B'}
-        title="Select Parent B"
-        excludeId={parentA?.id}
-        filterSpecies={null} // Allow any species — cross-breeding enabled!
-        onSelect={setParentB}
-        onClose={() => setPickerTarget(null)}
-      />
-
-      {/* ── Seed Compare Modal ── */}
+      <SeedPickerModal visible={pickerTarget === 'A'} title="Select Parent A"
+        excludeId={parentB?.id} onSelect={setParentA} onClose={() => setPickerTarget(null)} />
+      <SeedPickerModal visible={pickerTarget === 'B'} title="Select Parent B"
+        excludeId={parentA?.id} onSelect={setParentB} onClose={() => setPickerTarget(null)} />
+      <BreedResultModal visible={showResult} seeds={resultSeeds} mutations={resultMuts}
+        crossFamily={crossFam}
+        onClose={() => { setShowResult(false); setParentA(null); setParentB(null); }} />
       {parentA && parentB && (
-        <SeedCompareModal
-          visible={showCompare}
-          seedA={parentA}
-          seedB={parentB}
-          onClose={() => setShowCompare(false)}
-        />
+        <CompareModal parentA={parentA} parentB={parentB}
+          visible={showCompare} onClose={() => setShowCompare(false)} />
       )}
-
-      {/* ── Breed Result Modal ── */}
-      <BreedResultModal
-        visible={showResult}
-        seeds={resultSeeds}
-        mutationEvents={resultMutations}
-        onClose={() => {
-          setShowResult(false);
-          setParentA(null);
-          setParentB(null);
-        }}
-      />
     </ScreenShell>
-  );
-}
-
-// ─── How It Works ─────────────────────────────
-
-function CrossSpeciesGuide() {
-  const steps = [
-    { icon: 'flask-outline',     text: 'You selected seeds from different species — hybridisation in progress!' },
-    { icon: 'trending-up-outline', text: 'Offspring species is determined by which parent has more dominant VIGOR alleles' },
-    { icon: 'color-palette-outline', text: 'Base traits are blended between both parent species' },
-    { icon: 'star-outline',      text: 'Cross-species hybrids earn a +10% rarity boost — they are unusual finds!' },
-    { icon: 'archive-outline',   text: 'All 3 offspring seeds are added to your inventory as usual' },
-  ];
-
-  return (
-    <View style={howStyles.section}>
-      <AppText variant="label" color="muted" style={howStyles.header}>
-        Cross-Species Breeding Guide
-      </AppText>
-      {steps.map((step, i) => (
-        <View key={i} style={howStyles.row}>
-          <View style={howStyles.iconBox}>
-            <Ionicons name={asIconName(step.icon)} size={15} color={COLORS.rarity_legendary} />
-          </View>
-          <AppText variant="caption" color="secondary" style={howStyles.text}>
-            {step.text}
-          </AppText>
-        </View>
-      ))}
-    </View>
-  );
-}
-
-function HowItWorksSection() {
-  const steps = [
-    { icon: 'leaf-outline',      text: 'Select two seeds (any species — cross-breeding allowed!)' },
-    { icon: 'git-merge-outline', text: 'Each gene is inherited from one parent via Mendelian segregation' },
-    { icon: 'flash-outline',     text: 'Rare mutations may flip individual alleles' },
-    { icon: 'star-outline',      text: 'Offspring with unusual allele combinations score higher rarity' },
-    { icon: 'archive-outline',   text: '3 new seeds are produced and added to your inventory' },
-  ];
-
-  return (
-    <View style={howStyles.section}>
-      <AppText variant="label" color="muted" style={howStyles.header}>
-        Genetics Guide
-      </AppText>
-      {steps.map((step, i) => (
-        <View key={i} style={howStyles.row}>
-          <View style={howStyles.iconBox}>
-            <Ionicons name={asIconName(step.icon)} size={15} color={COLORS.green_primary} />
-          </View>
-          <AppText variant="caption" color="secondary" style={howStyles.text}>
-            {step.text}
-          </AppText>
-        </View>
-      ))}
-    </View>
   );
 }
 
 // ─── Styles ───────────────────────────────────
 
 const styles = StyleSheet.create({
-  section: {
-    marginBottom: SPACING['4'],
-  },
-  sectionHeader: {
-    marginBottom: SPACING['3'],
-  },
-  parentsRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: SPACING['2'],
-    marginBottom: SPACING['3'],
-  },
-  crossDivider: {
-    marginTop: SPACING['8'],
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 28,
-  },
-  crossGlyph: {
-    fontSize: 18,
-    color: COLORS.text_muted,
-    fontWeight: TYPOGRAPHY.weight.bold,
-  },
-  warningRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING['2'],
-    marginBottom: SPACING['3'],
-  },
-  breedBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING['2'],
-    paddingVertical: SPACING['3'],
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: COLORS.border_subtle,
-    backgroundColor: COLORS.bg_deep,
-    opacity: 0.55,
-  },
-  compareBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING['2'],
-    paddingVertical: SPACING['2'],
-    marginBottom: SPACING['2'],
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border_subtle,
-    backgroundColor: COLORS.bg_deep,
-  },
-  breedBtnActive: {
-    opacity: 1,
-    borderColor: COLORS.green_deep,
-    backgroundColor: COLORS.bg_overlay,
-  },
-  breedBtnPressed: {
-    backgroundColor: COLORS.bg_raised,
-  },
-  previewNote: {
-    marginBottom: SPACING['3'],
-    lineHeight: 18,
-  },
+  section:      { marginBottom: SPACING['4'] },
+  sectionLabel: { marginBottom: SPACING['3'] },
+  compareBtn:   { flexDirection:'row', alignItems:'center', justifyContent:'center', gap:SPACING['2'], paddingVertical:SPACING['2'], marginTop:SPACING['2'], borderRadius:RADIUS.md, borderWidth:1, borderColor:COLORS.border_subtle, backgroundColor:COLORS.bg_deep },
+  parents:      { flexDirection:'row', alignItems:'flex-start', gap:SPACING['2'], marginBottom:SPACING['3'] },
+  crossIcon:    { marginTop: SPACING['8'], alignItems:'center', width:28 },
+  crossGlyph:   { fontSize:18, color:COLORS.text_muted, fontWeight:TYPOGRAPHY.weight.bold },
+  breedBtn:     { flexDirection:'row', alignItems:'center', justifyContent:'center', gap:SPACING['2'], paddingVertical:SPACING['3'], borderRadius:RADIUS.lg, borderWidth:1, borderColor:COLORS.border_subtle, backgroundColor:COLORS.bg_deep, opacity:0.55 },
+  breedBtnActive:{ opacity:1, borderColor:COLORS.green_deep, backgroundColor:COLORS.bg_overlay },
+  breedBtnHybrid:{ borderColor:COLORS.rarity_legendary, backgroundColor:'rgba(196,154,26,0.08)' },
+  previewNote:  { marginBottom:SPACING['3'], lineHeight:18 },
 });
 
 const slotStyles = StyleSheet.create({
-  wrapper: {
-    flex: 1,
-    position: 'relative',
-  },
-  label: {
-    textAlign: 'center',
-    marginBottom: SPACING['2'],
-  },
-  slot: {
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    minHeight: 110,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: SPACING['3'],
-  },
-  slotEmpty: {
-    backgroundColor: COLORS.bg_deep,
-    borderColor: COLORS.border_subtle,
-    borderStyle: 'dashed',
-  },
-  slotFilled: {
-    backgroundColor: COLORS.bg_surface,
-    borderColor: COLORS.green_deep,
-  },
-  slotPressed: {
-    opacity: 0.7,
-  },
-  emptyContent: {
-    alignItems: 'center',
-    gap: SPACING['2'],
-  },
-  filledContent: {
-    alignItems: 'center',
-    gap: SPACING['1'],
-  },
-  emoji: {
-    fontSize: 26,
-  },
-  rarityDot: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 8,
-    height: 8,
-    borderRadius: RADIUS.full,
-  },
-  clearBtn: {
-    position: 'absolute',
-    top: 24,
-    right: -8,
-    zIndex: 10,
-  },
+  wrapper:      { flex:1, position:'relative' },
+  label:        { textAlign:'center', marginBottom:SPACING['2'] },
+  slot:         { borderRadius:RADIUS.lg, borderWidth:1, minHeight:130, alignItems:'center', justifyContent:'center', padding:SPACING['2'] },
+  empty:        { backgroundColor:COLORS.bg_deep, borderColor:COLORS.border_subtle, borderStyle:'dashed' },
+  filled:       { backgroundColor:COLORS.bg_surface, borderColor:COLORS.green_deep },
+  emptyContent: { alignItems:'center', gap:SPACING['2'] },
+  filledContent:{ alignItems:'center', gap:SPACING['1'] },
+  rarityDot:    { position:'absolute', top:-4, right:-4, width:8, height:8, borderRadius:RADIUS.full },
+  clearBtn:     { position:'absolute', top:24, right:-8, zIndex:10 },
+});
+
+const bannerStyles = StyleSheet.create({
+  container: { flexDirection:'column', gap:2, backgroundColor:'rgba(196,154,26,0.10)', borderRadius:RADIUS.md, borderWidth:1, borderColor:COLORS.rarity_legendary, padding:SPACING['2'], marginBottom:SPACING['3'] },
+  text:      { color:COLORS.rarity_legendary, letterSpacing:0.8 },
+  sub:       { color:COLORS.text_muted, fontSize:10, marginTop:1 },
 });
 
 const previewStyles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING['2'],
-    marginBottom: SPACING['2'],
-  },
-  traitLabel: {
-    width: 44,
-    flexShrink: 0,
-    fontSize: 9,
-  },
-  track: {
-    flex: 1,
-    height: 6,
-    backgroundColor: COLORS.bg_overlay,
-    borderRadius: RADIUS.full,
-    overflow: 'visible',
-    position: 'relative',
-  },
-  rangeBand: {
-    position: 'absolute',
-    height: '100%',
-    backgroundColor: COLORS.green_deep,
-    borderRadius: RADIUS.full,
-    opacity: 0.7,
-  },
-  meanMarker: {
-    position: 'absolute',
-    width: 3,
-    height: 10,
-    top: -2,
-    backgroundColor: COLORS.green_bright,
-    borderRadius: RADIUS.full,
-    marginLeft: -1.5,
-  },
-  meanVal: {
-    width: 40,
-    textAlign: 'right',
-    fontSize: TYPOGRAPHY.size.xs,
-    flexShrink: 0,
-  },
+  row:    { flexDirection:'row', alignItems:'center', gap:SPACING['2'], marginBottom:SPACING['2'] },
+  label:  { width:44, fontSize:9 },
+  track:  { flex:1, height:6, backgroundColor:COLORS.bg_overlay, borderRadius:RADIUS.full, overflow:'visible', position:'relative' },
+  band:   { position:'absolute', height:'100%', backgroundColor:COLORS.green_deep, borderRadius:RADIUS.full, opacity:0.7 },
+  marker: { position:'absolute', width:3, height:10, top:-2, backgroundColor:COLORS.green_bright, borderRadius:RADIUS.full, marginLeft:-1.5 },
+  val:    { width:40, textAlign:'right', fontSize:TYPOGRAPHY.size.xs },
 });
 
 const pickerStyles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: COLORS.bg_primary,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING['5'],
-    paddingTop: SPACING['5'],
-    paddingBottom: SPACING['3'],
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border_subtle,
-  },
-  closeBtn: {
-    padding: SPACING['2'],
-  },
-  filterNote: {
-    paddingHorizontal: SPACING['5'],
-    paddingTop: SPACING['2'],
-  },
-  list: {
-    padding: SPACING['5'],
-    gap: SPACING['2'],
-  },
-  seedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.bg_surface,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: COLORS.border_subtle,
-    overflow: 'hidden',
-    paddingRight: SPACING['3'],
-  },
-  seedRowPressed: {
-    backgroundColor: COLORS.bg_raised,
-  },
-  rarityStripe: {
-    width: 4,
-    alignSelf: 'stretch',
-    opacity: 0.8,
-  },
-  seedInfo: {
-    flex: 1,
-    padding: SPACING['3'],
-    gap: SPACING['1'],
-  },
-  seedTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  traitRow: {
-    flexDirection: 'row',
-    gap: SPACING['4'],
-    marginTop: SPACING['1'],
-  },
-  miniStat: {
-    alignItems: 'center',
-    gap: 1,
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING['4'],
-    padding: SPACING['8'],
-  },
-  emptyText: {
-    textAlign: 'center',
-    maxWidth: 240,
-    lineHeight: 22,
-  },
+  root:        { flex:1, backgroundColor:COLORS.bg_primary },
+  header:      { flexDirection:'row', justifyContent:'space-between', alignItems:'center', paddingHorizontal:SPACING['5'], paddingTop:SPACING['5'], paddingBottom:SPACING['3'], borderBottomWidth:1, borderBottomColor:COLORS.border_subtle },
+  closeBtn:    { padding:SPACING['2'] },
+  note:        { paddingHorizontal:SPACING['5'], paddingTop:SPACING['2'], paddingBottom:SPACING['1'] },
+  list:        { padding:SPACING['5'], gap:SPACING['2'] },
+  empty:       { flex:1, alignItems:'center', justifyContent:'center', gap:SPACING['4'], padding:SPACING['8'] },
+  emptyText:   { textAlign:'center' },
+  familyHeader:{ marginTop:SPACING['3'], marginBottom:SPACING['2'] },
+  row:         { flexDirection:'row', alignItems:'center', backgroundColor:COLORS.bg_surface, borderRadius:RADIUS.lg, borderWidth:1, borderColor:COLORS.border_subtle, overflow:'hidden', paddingRight:SPACING['3'], marginBottom:SPACING['2'] },
+  rowPressed:  { backgroundColor:COLORS.bg_raised },
+  stripe:      { width:4, alignSelf:'stretch', opacity:0.8 },
+  preview:     { width:44, height:44, backgroundColor:COLORS.bg_deep, alignItems:'center', justifyContent:'flex-end', marginHorizontal:SPACING['2'], borderRadius:RADIUS.sm, overflow:'hidden', flexShrink:0 },
+  info:        { flex:1, gap:SPACING['1'], paddingVertical:SPACING['2'] },
+  infoTop:     { flexDirection:'row', alignItems:'center', justifyContent:'space-between' },
 });
 
 const resultStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: COLORS.bg_surface,
-    borderTopLeftRadius: RADIUS['2xl'],
-    borderTopRightRadius: RADIUS['2xl'],
-    borderTopWidth: 1,
-    borderColor: COLORS.green_deep,
-    padding: SPACING['6'],
-    gap: SPACING['3'],
-  },
-  header: {
-    gap: SPACING['1'],
-  },
-  subLabel: {
-    marginBottom: SPACING['2'],
-  },
-  offspringRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING['3'],
-    backgroundColor: COLORS.bg_raised,
-    borderRadius: RADIUS.md,
-    padding: SPACING['3'],
-    borderWidth: 1,
-    borderColor: COLORS.border_subtle,
-  },
-  offspringIndex: {
-    width: 32,
-    height: 32,
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.bg_deep,
-    flexShrink: 0,
-  },
-  offspringInfo: {
-    flex: 1,
-    gap: SPACING['1'],
-  },
-  offspringTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  doneBtn: {
-    alignItems: 'center',
-    paddingVertical: SPACING['3'],
-    marginTop: SPACING['2'],
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: COLORS.green_deep,
-    backgroundColor: COLORS.bg_overlay,
-  },
+  overlay: { flex:1, backgroundColor:'rgba(0,0,0,0.72)', justifyContent:'flex-end' },
+  sheet:   { backgroundColor:COLORS.bg_surface, borderTopLeftRadius:RADIUS['2xl'], borderTopRightRadius:RADIUS['2xl'], borderTopWidth:1, borderColor:COLORS.green_deep, padding:SPACING['6'], gap:SPACING['3'] },
+  header:  { gap:SPACING['1'] },
+  row:     { flexDirection:'row', alignItems:'center', gap:SPACING['3'], backgroundColor:COLORS.bg_raised, borderRadius:RADIUS.md, padding:SPACING['3'], borderWidth:1, borderColor:COLORS.border_subtle },
+  idx:     { width:28, height:28, borderRadius:RADIUS.full, borderWidth:1, alignItems:'center', justifyContent:'center', backgroundColor:COLORS.bg_deep, flexShrink:0 },
+  info:    { flex:1, gap:SPACING['1'] },
+  infoRow: { flexDirection:'row', alignItems:'center', justifyContent:'space-between' },
+  btn:     { alignItems:'center', paddingVertical:SPACING['3'], borderRadius:RADIUS.lg, borderWidth:1, borderColor:COLORS.green_deep, backgroundColor:COLORS.bg_overlay },
 });
 
 const howStyles = StyleSheet.create({
-  section: {
-    gap: SPACING['3'],
-  },
-  header: {
-    marginBottom: SPACING['2'],
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: SPACING['3'],
-  },
-  iconBox: {
-    width: 26,
-    height: 26,
-    borderRadius: RADIUS.sm,
-    backgroundColor: COLORS.bg_surface,
-    borderWidth: 1,
-    borderColor: COLORS.border_subtle,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  text: {
-    flex: 1,
-    lineHeight: 20,
-    paddingTop: SPACING['1'],
-  },
+  container: { gap:SPACING['3'] },
+  heading:   { marginBottom:SPACING['2'] },
+  row:       { flexDirection:'row', alignItems:'flex-start', gap:SPACING['3'] },
+  icon:      { width:26, height:26, borderRadius:RADIUS.sm, backgroundColor:COLORS.bg_surface, borderWidth:1, borderColor:COLORS.border_subtle, alignItems:'center', justifyContent:'center', flexShrink:0 },
+  text:      { flex:1, lineHeight:20, paddingTop:SPACING['1'] },
 });
