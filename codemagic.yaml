@@ -51,7 +51,20 @@ workflows:
 
       - name: Debug Expo config
         script: |
+          set -x
           export EXPO_DEBUG=1
+          node -v
+          npm -v
+          npx expo --version
+          echo "--- package.json ---"
+          cat package.json
+          echo "--- app.json ---"
+          cat app.json
+          echo "--- babel.config.js ---"
+          cat babel.config.js
+          echo "--- trying expo config ---"
+          npx expo config --type public
+          echo "--- trying expo config json ---"
           npx expo config --json
 
       - name: Build APK (EAS local)
