@@ -59,7 +59,7 @@ workflows:
         script: nvm use 20 || true
 
       - name: Install dependencies
-        script: npm ci
+        script: npm install
 
       - name: Download missing assets
         script: |
@@ -76,24 +76,6 @@ workflows:
 
       - name: Install EAS CLI
         script: npm install -g eas-cli@latest
-
-      - name: Configure EAS project
-        script: |
-          # Link to Expo project without interactive prompt
-          cat > eas.json << 'EASEOF'
-          {
-            "cli": { "version": ">= 7.0.0", "appVersionSource": "local" },
-            "build": {
-              "preview": {
-                "distribution": "internal",
-                "android": { "buildType": "apk", "gradleCommand": ":app:assembleRelease" }
-              },
-              "production": {
-                "android": { "buildType": "app-bundle" }
-              }
-            }
-          }
-          EASEOF
 
       - name: Build APK (EAS local)
         script: |
