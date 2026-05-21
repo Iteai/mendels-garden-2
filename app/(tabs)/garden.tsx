@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────
 // app/(tabs)/garden.tsx
 // Garden screen — complete Phase 5 game loop
+// Phase 9: React.memo audit, stable selectors, StageTransitionFlash
 //
 // Full flow:
 //   Empty plot tap → SeedPickerModal → plantFromInventory()
@@ -15,12 +16,12 @@ import {
   Modal, ScrollView, FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ScreenShell, AppText, Card, Badge, StatBar, GrowthTimer, RarityPulse, HarvestJournal } from '../../src/components/ui';
+import { ScreenShell, AppText, Card, Badge, StatBar, GrowthTimer, RarityPulse, HarvestJournal, StageTransitionFlash } from '../../src/components/ui';
 import { PlantRenderer } from '../../src/components/plants';
 import {
-  useGardenPlots, useGardenPlants, useOccupiedPlotCount,
-  useGardenActions, useSeeds, useInventoryActions,
-  usePlantsNeedingWater, useSimulationSpeed, useCurrency,
+  useGardenPlots, useGardenPlants, useGardenActions, useSeeds,
+  useSimulationSpeed,
+  usePlantsNeedingWaterStable, useOccupiedPlotCountStable,
 } from '../../src/store';
 import {
   useGameActions, canHarvest, canCompost, shouldWater, shouldFeed, rarityFromScore,
@@ -51,62 +52,71 @@ function healthColor(h: PlantInstance['health']): string {
 }
 
 // ─── Plot Cells ───────────────────────────────
+// Phase 9: Both cell components wrapped in React.memo — they only
+// re-render when their specific plant/plot data changes, not on
+// every simulation tick.
 
-function EmptyPlotCell({ plot, onPress }: { plot: GardenPlot; onPress: (id: string) => void }) {
-  if (plot.state === 'locked') {
-    return (
-      <View style={[styles.cell, styles.cellLocked]}>
-        <Ionicons name="lock-closed" size={18} color={COLORS.text_muted} />
-        <AppText variant="label" color="muted" style={styles.cellLabel}>locked</AppText>
-      </View>
-    );
-  }
-  return (
-    <Pressable
-      style={({ pressed }) => [styles.cell, styles.cellEmpty, pressed && styles.cellPressed]}
-      onPress={() => onPress(plot.id)}
-    >
-      <Ionicons name="add-circle-outline" size={22} color={COLORS.green_muted} />
-      <AppText variant="label" color="muted" style={styles.cellLabel}>plant</AppText>
-    </Pressable>
-  );
-}
-
-function OccupiedPlotCell({ plant, onPress }: {
-  plant: PlantInstance; onPress: (p: PlantInstance) => void;
-}) {
-  const harvestReady = plant.growthStage === 'harvest_ready';
-  const isDying      = plant.growthStage === 'dead' || plant.growthStage === 'decaying';
-  const rarity = rarityFromScore(plant.phenotype.rarityScore);
-
-  return (
-    <RarityPulse rarity={rarity} size={CELL_SIZE}>
-      <Pressable
-        style={({ pressed }) => [
-          styles.cell, styles.cellOccupied,
-          harvestReady && styles.cellHarvestReady,
-          isDying && styles.cellDying,
-          pressed && styles.cellPressed,
-        ]}
-        onPress={() => onPress(plant)}
-      >
-        <View style={[styles.healthDot, { backgroundColor: healthColor(plant.health) }]} />
-        <PlantRenderer plant={plant} width={PLANT_SIZE} height={PLANT_SIZE} />
-        <View style={styles.alertRow}>
-          {shouldWater(plant) && <Ionicons name="water" size={9} color={COLORS.rarity_rare} />}
-          {shouldFeed(plant)  && <Ionicons name="leaf"  size={9} color={COLORS.status_stressed} />}
-          {harvestReady       && <Ionicons name="star"  size={9} color={COLORS.rarity_legendary} />}
-          {isDying            && <Ionicons name="skull-outline" size={9} color={COLORS.text_muted} />}
-          {!shouldWater(plant) && !shouldFeed(plant) && !harvestReady && !isDying && (
-            <AppText style={styles.stageMicro}>
-              {plant.growthStage.slice(0, 4).toUpperCase()}
-            </AppText>
-          )}
+const EmptyPlotCell = React.memo(
+  ({ plot, onPress }: { plot: GardenPlot; onPress: (id: string) => void }) => {
+    if (plot.state === 'locked') {
+      return (
+        <View style={[styles.cell, styles.cellLocked]}>
+          <Ionicons name="lock-closed" size={18} color={COLORS.text_muted} />
+          <AppText variant="label" color="muted" style={styles.cellLabel}>locked</AppText>
         </View>
+      );
+    }
+    return (
+      <Pressable
+        style={({ pressed }: { pressed: boolean }) => [styles.cell, styles.cellEmpty, pressed && styles.cellPressed]}
+        onPress={() => onPress(plot.id)}
+      >
+        <Ionicons name="add-circle-outline" size={22} color={COLORS.green_muted} />
+        <AppText variant="label" color="muted" style={styles.cellLabel}>plant</AppText>
       </Pressable>
-    </RarityPulse>
-  );
-}
+    );
+  },
+);
+EmptyPlotCell.displayName = 'EmptyPlotCell';
+
+const OccupiedPlotCell = React.memo(
+  ({ plant, onPress }: { plant: PlantInstance; onPress: (p: PlantInstance) => void }) => {
+    const harvestReady = plant.growthStage === 'harvest_ready';
+    const isDying      = plant.growthStage === 'dead' || plant.growthStage === 'decaying';
+    const rarity       = rarityFromScore(plant.phenotype.rarityScore);
+
+    return (
+      <RarityPulse rarity={rarity} size={CELL_SIZE}>
+        <Pressable
+          style={({ pressed }: { pressed: boolean }) => [
+            styles.cell, styles.cellOccupied,
+            harvestReady && styles.cellHarvestReady,
+            isDying && styles.cellDying,
+            pressed && styles.cellPressed,
+          ]}
+          onPress={() => onPress(plant)}
+        >
+          {/* Phase 9: Stage transition flash — plays on every growthStage change */}
+          <StageTransitionFlash stage={plant.growthStage} />
+          <View style={[styles.healthDot, { backgroundColor: healthColor(plant.health) }]} />
+          <PlantRenderer plant={plant} width={PLANT_SIZE} height={PLANT_SIZE} />
+          <View style={styles.alertRow}>
+            {shouldWater(plant) && <Ionicons name="water" size={9} color={COLORS.rarity_rare} />}
+            {shouldFeed(plant)  && <Ionicons name="leaf"  size={9} color={COLORS.status_stressed} />}
+            {harvestReady       && <Ionicons name="star"  size={9} color={COLORS.rarity_legendary} />}
+            {isDying            && <Ionicons name="skull-outline" size={9} color={COLORS.text_muted} />}
+            {!shouldWater(plant) && !shouldFeed(plant) && !harvestReady && !isDying && (
+              <AppText style={styles.stageMicro}>
+                {plant.growthStage.slice(0, 4).toUpperCase()}
+              </AppText>
+            )}
+          </View>
+        </Pressable>
+      </RarityPulse>
+    );
+  },
+);
+OccupiedPlotCell.displayName = 'OccupiedPlotCell';
 
 // ─── Plot Grid ────────────────────────────────
 
@@ -149,11 +159,12 @@ function PlotGrid({ onEmpty, onOccupied }: {
 
 // ─── Summary strip ────────────────────────────
 
+// Phase 9: GardenSummary uses stable selectors — re-renders only when
+// occupied count or thirsty plant count actually changes.
 function GardenSummary() {
-  const occupied  = useOccupiedPlotCount();
-  const needWater = usePlantsNeedingWater();
+  const occupied  = useOccupiedPlotCountStable();
+  const needWater = usePlantsNeedingWaterStable();
   const total     = GAME.GARDEN_ROWS * GAME.GARDEN_COLS;
-  const currency  = useCurrency();
 
   return (
     <View style={styles.summaryRow}>
@@ -166,14 +177,16 @@ function GardenSummary() {
   );
 }
 
-function SummaryStat({ value, label, color }: { value: number; label: string; color: string }) {
-  return (
+// Phase 9: memoised — only re-renders when value/label/color prop changes.
+const SummaryStat = React.memo(
+  ({ value, label, color }: { value: number; label: string; color: string }) => (
     <View style={styles.summaryItem}>
       <AppText variant="stat" style={{ color }}>{value}</AppText>
       <AppText variant="label" color="muted">{label}</AppText>
     </View>
-  );
-}
+  ),
+);
+SummaryStat.displayName = 'SummaryStat';
 
 // ─── Seed Picker Modal ────────────────────────
 

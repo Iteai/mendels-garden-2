@@ -209,9 +209,20 @@ export const GAME = {
   INITIAL_UNLOCKED_PLOTS: 6,
 
   // Simulation
-  SIMULATION_INTERVAL_MS: 5000,   // tick every 5s
-  TICKS_PER_GAME_MINUTE: 1,       // 1 tick = 1 game minute
+  SIMULATION_INTERVAL_MS: 5000,    // tick every 5s
+  TICKS_PER_GAME_MINUTE: 1,        // 1 tick = 1 game minute
   OFFLINE_CATCH_UP_CAP_TICKS: 720, // max 1hr of offline progress
+
+  // Phase 9: Performance limits
+  /** Hard cap on living plants — prevents unbounded memory growth */
+  PLANT_CAP: 300,
+  /** Chunk size for batched offline catch-up simulation */
+  SIM_CHUNK_SIZE: 50,
+  /**
+   * Dead plants older than this many ticks are auto-pruned
+   * from the store during each simulation batch to free memory.
+   */
+  DEAD_PLANT_PRUNE_TICKS: 5,
 
   // Rarity thresholds (rarityScore)
   RARITY_UNCOMMON:  0.3,

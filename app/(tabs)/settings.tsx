@@ -228,7 +228,7 @@ export default function SettingsScreen() {
         <SettingRow
           icon="leaf"
           label="Plant Genetics"
-          description="v1.0.0 — Phase 7 UI Improvement"
+          description="v1.0.0 — Phase 9 Optimisation"
         />
         <View style={styles.settingDivider} />
         <SettingRow

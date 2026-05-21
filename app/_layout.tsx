@@ -10,7 +10,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { COLORS, TYPOGRAPHY } from '../src/constants/theme';
+import { COLORS, TYPOGRAPHY, GAME } from '../src/constants/theme';
 import {
   useAppStore,
   useGardenActions,
@@ -63,34 +63,48 @@ const loadingStyles = StyleSheet.create({
 // ─── App Initialiser ─────────────────────────
 // Phase 8: tries AsyncStorage restore first,
 //           falls back to fresh initialisation.
+// Phase 9: uses async chunked simulation for large offline catch-ups
+//           to avoid blocking the JS thread on startup.
 
 function AppInitialiser() {
-  const { initGarden, tickSimulation, setLastSimulatedAt } = useGardenActions();
+  const { initGarden, tickSimulation, tickSimulationAsync, setLastSimulatedAt } = useGardenActions();
   const { initStartingInventory } = useInventoryActions();
   const { markInventoryInitialised } = useSettingsActions();
 
-  const lastSimulatedAt     = useAppStore((s) => s.lastSimulatedAt);
-  const simulationSpeed     = useAppStore((s) => s.simulationSpeed);
+  const lastSimulatedAt      = useAppStore((s) => s.lastSimulatedAt);
+  const simulationSpeed      = useAppStore((s) => s.simulationSpeed);
   const inventoryInitialised = useInventoryInitialised();
 
   useEffect(() => {
-    // 1. Initialise garden grid (no-op if already exists)
-    initGarden();
+    async function init() {
+      // 1. Initialise garden grid (no-op if already exists)
+      initGarden();
 
-    // 2. Seed starting inventory on first ever launch
-    if (!inventoryInitialised) {
-      initStartingInventory();
-      markInventoryInitialised();
+      // 2. Seed starting inventory on first ever launch
+      if (!inventoryInitialised) {
+        initStartingInventory();
+        markInventoryInitialised();
+      }
+
+      // 3. Offline catch-up simulation
+      // Phase 9: for large tick counts (> SIM_CHUNK_SIZE) use the async
+      // chunked variant to avoid blocking the JS thread during app startup.
+      const now          = Date.now();
+      const elapsedMs    = now - lastSimulatedAt;
+      const elapsedTicks = Math.floor((elapsedMs / 5000) * simulationSpeed);
+
+      if (elapsedTicks > 0) {
+        if (elapsedTicks > GAME.SIM_CHUNK_SIZE) {
+          await tickSimulationAsync(elapsedTicks);
+        } else {
+          tickSimulation(elapsedTicks);
+        }
+      }
+
+      setLastSimulatedAt(now);
     }
 
-    // 3. Offline catch-up simulation
-    const now = Date.now();
-    const elapsedMs = now - lastSimulatedAt;
-    const elapsedTicks = Math.floor((elapsedMs / 5000) * simulationSpeed);
-    if (elapsedTicks > 0) {
-      tickSimulation(elapsedTicks);
-    }
-    setLastSimulatedAt(now);
+    init();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return null;

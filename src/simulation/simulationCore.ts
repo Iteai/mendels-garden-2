@@ -327,6 +327,86 @@ export function simulatePlants(
   return { plants: updated, allEvents };
 }
 
+// ─── Chunked batch simulation (Phase 9) ──────
+// For large offline catch-up runs, processing all plants
+// in one synchronous loop can block the JS thread.
+// This variant processes plants in `chunkSize` batches,
+// returning a Promise so callers can interleave with the
+// event loop between chunks (prevents ANR on Android).
+
+export type ChunkedBatchResult = BatchResult & {
+  chunksProcessed: number;
+};
+
+/**
+ * Async variant of `simulatePlants`.
+ * Processes living plants in chunks of `chunkSize`, yielding
+ * to the event loop between chunks via `setImmediate`.
+ *
+ * Use for large offline catch-ups (> 200 plants or > 100 ticks).
+ * For small gardens or short tick counts, `simulatePlants` is faster.
+ */
+export function simulatePlantsChunked(
+  plants:    Record<string, PlantInstance>,
+  ticks:     number,
+  chunkSize: number = 50,
+): Promise<ChunkedBatchResult> {
+  return new Promise((resolve) => {
+    const allIds = Object.keys(plants);
+    const updated: Record<string, PlantInstance> = {};
+    const allEvents: SimulationEvent[] = [];
+    let chunkIndex = 0;
+    let chunksProcessed = 0;
+
+    function processChunk() {
+      const start = chunkIndex;
+      const end   = Math.min(chunkIndex + chunkSize, allIds.length);
+
+      for (let i = start; i < end; i++) {
+        const id    = allIds[i];
+        const plant = plants[id];
+
+        if (plant.growthStage === 'dead') {
+          updated[id] = plant;
+          continue;
+        }
+
+        let species: SpeciesDefinition;
+        try {
+          species = getSpecies(plant.speciesId);
+        } catch {
+          updated[id] = plant;
+          continue;
+        }
+
+        const { plant: advanced, events } = advancePlant(plant, ticks, species);
+        updated[id] = advanced;
+        // Avoid spread overhead for large event arrays
+        for (let j = 0; j < events.length; j++) {
+          allEvents.push(events[j]);
+        }
+      }
+
+      chunkIndex = end;
+      chunksProcessed++;
+
+      if (chunkIndex >= allIds.length) {
+        resolve({ plants: updated, allEvents, chunksProcessed });
+      } else {
+        // Yield to event loop before next chunk (setTimeout(fn,0) works on
+        // all platforms; React Native's setImmediate is not in TS lib types)
+        setTimeout(processChunk, 0);
+      }
+    }
+
+    if (allIds.length === 0) {
+      resolve({ plants: updated, allEvents, chunksProcessed: 0 });
+    } else {
+      processChunk();
+    }
+  });
+}
+
 // ─── Stage display helpers ────────────────────
 
 /** Human-readable stage label */

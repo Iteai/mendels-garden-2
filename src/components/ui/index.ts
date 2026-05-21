@@ -13,3 +13,4 @@ export { GrowthTimer } from './GrowthTimer';
 export { RarityPulse } from './RarityPulse';
 export { TraitComparison } from './TraitComparison';
 export { HarvestJournal } from './HarvestJournal';
+export { StageTransitionFlash } from './StageTransitionFlash'; // Phase 9

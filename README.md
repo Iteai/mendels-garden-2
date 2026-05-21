@@ -19,7 +19,7 @@ collection mechanics into a deep but approachable mobile experience.
 | 6b    | 20 Varieties + Cross-Family Breeding | ✅ Complete |
 | 7     | UI Improvement        | ✅ Complete  |
 | 8     | Persistence           | ✅ Complete  |
-| 9     | Optimisation          | 🔲 Planned   |
+| 9     | Optimisation          | ✅ Complete  |
 
 ---
 

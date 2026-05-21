@@ -19,9 +19,11 @@ export {
   // Core advancement
   advancePlant,
   simulatePlants,
+  simulatePlantsChunked,   // Phase 9: async chunked variant
 
   // Types
   type SimulationEvent,
   type AdvanceResult,
   type BatchResult,
+  type ChunkedBatchResult, // Phase 9
 } from './simulationCore';

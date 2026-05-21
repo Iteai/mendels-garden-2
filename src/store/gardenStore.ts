@@ -2,6 +2,7 @@
 // src/store/gardenStore.ts
 // Garden state: plots, living plants, simulation clock
 // Phase 4: tickSimulation wired to simulationCore
+// Phase 9: plant cap, dead-plant GC, chunked offline sim
 // ─────────────────────────────────────────────
 
 import { StateCreator } from 'zustand';
@@ -10,7 +11,11 @@ import type {
   SpeciesId, Genotype, Phenotype,
 } from '../types';
 import { GAME } from '../constants/theme';
-import { simulatePlants, type SimulationEvent } from '../simulation';
+import {
+  simulatePlants,
+  simulatePlantsChunked,
+  type SimulationEvent,
+} from '../simulation';
 
 // ─── Helpers ──────────────────────────────────
 
@@ -34,6 +39,44 @@ function createInitialPlots(): Record<string, GardenPlot> {
 
 function generatePlantId(): string {
   return `plant_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/**
+ * Prune plants that have been dead for more than DEAD_PLANT_PRUNE_TICKS.
+ * Also frees the associated plot slot.
+ * Returns a new plants + plots record (only allocates if something changed).
+ */
+function pruneDeadPlants(
+  plants: Record<string, PlantInstance>,
+  plots:  Record<string, GardenPlot>,
+): { plants: Record<string, PlantInstance>; plots: Record<string, GardenPlot> } | null {
+  const toPrune: string[] = [];
+
+  for (const id in plants) {
+    const p = plants[id];
+    if (p.growthStage === 'dead' && p.age > GAME.DEAD_PLANT_PRUNE_TICKS) {
+      toPrune.push(id);
+    }
+  }
+
+  if (toPrune.length === 0) return null; // nothing to do — avoid allocation
+
+  const newPlants = { ...plants };
+  const newPlots  = { ...plots };
+
+  for (const id of toPrune) {
+    const plant = plants[id];
+    delete newPlants[id];
+    if (plant.plotId && newPlots[plant.plotId]) {
+      newPlots[plant.plotId] = {
+        ...newPlots[plant.plotId],
+        state:   'empty',
+        plantId: null,
+      };
+    }
+  }
+
+  return { plants: newPlants, plots: newPlots };
 }
 
 // ─── Initial State ────────────────────────────
@@ -60,6 +103,8 @@ export type GardenActions = {
   waterPlant:          (plantId: string, amount: number) => void;
   addNutrients:        (plantId: string, amount: number) => void;
   tickSimulation:      (elapsedTicks: number) => SimulationEvent[];
+  /** Async variant — used for large offline catch-ups to avoid blocking the JS thread */
+  tickSimulationAsync: (elapsedTicks: number) => Promise<SimulationEvent[]>;
   setLastSimulatedAt:  (timestamp: number) => void;
   removePlant:         (plantId: string) => void;
 };
@@ -90,8 +135,15 @@ export const createGardenSlice: StateCreator<
   // ── Plant seed ────────────────────────────
 
   plantSeed: ({ plotId, speciesId, genotype, phenotype, parentIds, generation }) => {
-    const plot = get().plots[plotId];
+    const state = get();
+    const plot  = state.plots[plotId];
     if (!plot || plot.state !== 'empty') return null;
+
+    // Phase 9: enforce plant cap — count only living plants
+    const livingCount = Object.values(state.plants).filter(
+      (p) => p.growthStage !== 'dead',
+    ).length;
+    if (livingCount >= GAME.PLANT_CAP) return null;
 
     const now     = Date.now();
     const plantId = generatePlantId();
@@ -161,10 +213,9 @@ export const createGardenSlice: StateCreator<
     });
   },
 
-  // ── Simulation tick (Phase 4) ─────────────
-  // Delegates entirely to simulatePlants() — a pure function.
-  // Returns collected SimulationEvents for the caller to act on
-  // (notifications, UI badges, etc.).
+  // ── Simulation tick (synchronous) ─────────
+  // Delegates to simulatePlants() — a pure function.
+  // Also prunes dead plants after each batch (Phase 9).
 
   tickSimulation: (elapsedTicks) => {
     const capped = Math.min(Math.floor(elapsedTicks), GAME.OFFLINE_CATCH_UP_CAP_TICKS);
@@ -175,7 +226,58 @@ export const createGardenSlice: StateCreator<
 
     const { plants: updatedPlants, allEvents } = simulatePlants(currentPlants, capped);
 
-    set({ plants: updatedPlants });
+    // Phase 9: prune stale dead plants after simulation
+    const pruned = pruneDeadPlants(updatedPlants, get().plots);
+    if (pruned) {
+      set({ plants: pruned.plants, plots: pruned.plots });
+    } else {
+      set({ plants: updatedPlants });
+    }
+
+    return allEvents;
+  },
+
+  // ── Simulation tick (async, chunked) ──────
+  // Phase 9: for large offline catch-ups (many plants × many ticks)
+  // this avoids blocking the JS thread by chunking work.
+  // Used by app/_layout.tsx on startup when elapsedTicks is large.
+
+  tickSimulationAsync: async (elapsedTicks) => {
+    const capped = Math.min(Math.floor(elapsedTicks), GAME.OFFLINE_CATCH_UP_CAP_TICKS);
+    if (capped <= 0) return [];
+
+    const currentPlants = get().plants;
+    const plantCount = Object.keys(currentPlants).length;
+    if (plantCount === 0) return [];
+
+    // For large batches use chunked; for small batches synchronous is faster
+    const shouldChunk = plantCount > GAME.SIM_CHUNK_SIZE || capped > 100;
+
+    let updatedPlants: Record<string, PlantInstance>;
+    let allEvents: SimulationEvent[];
+
+    if (shouldChunk) {
+      const result = await simulatePlantsChunked(
+        currentPlants,
+        capped,
+        GAME.SIM_CHUNK_SIZE,
+      );
+      updatedPlants = result.plants;
+      allEvents     = result.allEvents;
+    } else {
+      const result = simulatePlants(currentPlants, capped);
+      updatedPlants = result.plants;
+      allEvents     = result.allEvents;
+    }
+
+    // Prune stale dead plants
+    const pruned = pruneDeadPlants(updatedPlants, get().plots);
+    if (pruned) {
+      set({ plants: pruned.plants, plots: pruned.plots });
+    } else {
+      set({ plants: updatedPlants });
+    }
+
     return allEvents;
   },
 
