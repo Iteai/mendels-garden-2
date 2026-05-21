@@ -107,7 +107,7 @@ workflows:
     publishing:
       email:
         recipients:
-          - $DEVELOPER_EMAIL
+          - your-email@example.com
         notify:
           success: true
           failure: true
