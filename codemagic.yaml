@@ -34,15 +34,12 @@ workflows:
   # Produces an installable APK. Triggered on every
   # push to develop or main. Fast — no signing needed.
 
-  android-debug:
-    name: Android Debug (APK)
-    instance_type: linux
+  android-workflow:
+    name: Android APK build
     max_build_duration: 60
 
     environment:
       node: 20.11.0
-      groups:
-        - expo_credentials      # must contain EXPO_TOKEN
       vars:
         PACKAGE_NAME: com.plantgenetics.app
         EAS_NO_VCS: "1"         # run inside Codemagic without git VCS checks
@@ -63,6 +60,14 @@ workflows:
 
       - name: Install dependencies
         script: npm ci
+
+      - name: Download missing assets
+        script: |
+          mkdir -p assets
+          curl -L -o assets/icon.png "https://dummyimage.com/1024x1024/1a2e1a/81c784.png"
+          curl -L -o assets/splash.png "https://dummyimage.com/1242x2436/1a2e1a/81c784.png"
+          curl -L -o assets/adaptive-icon.png "https://dummyimage.com/1024x1024/1a2e1a/81c784.png"
+          curl -L -o assets/favicon.png "https://dummyimage.com/192x192/1a2e1a/81c784.png"
 
       - name: Authenticate with Expo
         script: |
