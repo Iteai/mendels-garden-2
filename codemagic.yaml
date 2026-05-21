@@ -59,7 +59,7 @@ workflows:
         script: nvm use 20 || true
 
       - name: Install dependencies
-        script: npm install
+        script: npm install --legacy-peer-deps
 
       - name: Download missing assets
         script: |
