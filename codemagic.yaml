@@ -50,9 +50,9 @@ workflows:
         script: npm install -g eas-cli@latest
 
       - name: Debug Expo config
-  script: |
-    export EXPO_DEBUG=1
-    npx expo config --json
+        script: |
+          export EXPO_DEBUG=1
+          npx expo config --json
 
       - name: Build APK (EAS local)
         script: |
