@@ -24,18 +24,27 @@ workflows:
 
       - name: Patch Kotlin version
         script: |
-          if [ -f android/build.gradle ]; then
-            sed -i.bak "s/ext.kotlinVersion = '1.9.24'/ext.kotlinVersion = '1.9.25'/g" android/build.gradle || true
-            sed -i.bak "s/kotlinVersion = '1.9.24'/kotlinVersion = '1.9.25'/g" android/build.gradle || true
-          fi
-          if [ -f android/gradle/libs.versions.toml ]; then
-            sed -i.bak 's/kotlin = "1.9.24"/kotlin = "1.9.25"/g' android/gradle/libs.versions.toml || true
-          fi
+          echo "=== prima della patch ==="
+          grep -R "1.9.24" android || true
+          grep -R "kotlin" android || true
+
+          find android -type f ( -name "*.gradle" -o -name "*.kts" -o -name "*.toml" ) -exec \
+            sed -i.bak \
+            -e "s/1.9.24/1.9.25/g" \
+            {} ;
+
+          echo "=== dopo la patch ==="
+          grep -R "1.9.24" android || true
+          grep -R "1.9.25" android || true
+
+      - name: Set Android SDK location
+        script: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
 
       - name: Build Android Debug APK
         script: |
           cd android
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --stacktrace
 
     artifacts:
       - android/app/build/outputs/apk/debug/**/*.apk
@@ -43,7 +52,7 @@ workflows:
     publishing:
       email:
         recipients:
-          - your-email@example.com
+          - trabattig7@gmail.com
         notify:
           success: true
           failure: true
