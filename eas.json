@@ -11,6 +11,7 @@
         "buildType": "apk",
         "gradleCommand": ":app:assembleDebug"
       },
+      "installCommand": "npm install",
       "env": {
         "APP_ENV": "development"
       }
@@ -20,6 +21,7 @@
       "android": {
         "buildType": "apk"
       },
+      "installCommand": "npm install",
       "env": {
         "APP_ENV": "preview"
       }
@@ -28,6 +30,7 @@
       "android": {
         "buildType": "app-bundle"
       },
+      "installCommand": "npm install",
       "env": {
         "APP_ENV": "production"
       }
