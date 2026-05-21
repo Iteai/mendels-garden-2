@@ -23,6 +23,7 @@ import {
   loadGameState,
   autoSaveMiddleware,
 } from '../src/store/persistence';
+import { Slot } from 'expo-router';
 
 // ─── Splash / Loading Screen ─────────────────
 
@@ -166,15 +167,7 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <StatusBar style="light" backgroundColor={COLORS.bg_deep} />
         <AppInitialiser />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: COLORS.bg_primary },
-            animation: 'fade',
-          }}
-        >
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        </Stack>
+        <Slot />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
