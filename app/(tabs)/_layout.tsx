@@ -71,7 +71,7 @@ const badge = StyleSheet.create({
 export default function TabLayout() {
   return (
     <>
-      <SimulationLoop />
+      {/* <SimulationLoop /> */}
       <Tabs
         tabBar={(props) => <TabBar {...props} />}
         screenOptions={{ headerShown: false }}
