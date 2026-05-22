@@ -11,10 +11,7 @@
       "resizeMode": "contain",
       "backgroundColor": "#141A0E"
     },
-    "assetBundlePatterns": [
-      "**/*",
-      "node_modules/@expo/vector-icons/fonts/*.ttf"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.plantgenetics.app"
@@ -28,22 +25,7 @@
       "versionCode": 1
     },
     "web": {
-      "bundler": "metro",
-      "output": "static",
       "favicon": "./assets/favicon.png"
-    },
-    "plugins": [
-      "expo-font",
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "kotlinVersion": "1.9.25",
-            "newArchEnabled": false
-          }
-        }
-      ]
-    ],
-    "scheme": "plant-genetics"
+    }
   }
 }

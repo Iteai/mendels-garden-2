@@ -1,8 +1,3 @@
-// ─────────────────────────────────────────────
-// src/components/ui/index.ts
-// Re-exports all UI primitives
-// ─────────────────────────────────────────────
-
 export { AppText } from './AppText';
 export { Card } from './Card';
 export { Badge } from './Badge';
@@ -13,4 +8,4 @@ export { GrowthTimer } from './GrowthTimer';
 export { RarityPulse } from './RarityPulse';
 export { TraitComparison } from './TraitComparison';
 export { HarvestJournal } from './HarvestJournal';
-export { StageTransitionFlash } from './StageTransitionFlash'; // Phase 9
+export { StageTransitionFlash } from './StageTransitionFlash';

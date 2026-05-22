@@ -1,15 +1,42 @@
 import React from 'react';
+import { View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Leaf, Archive, FlaskConical, Settings } from 'lucide-react-native';
+import { useHarvestReadyPlants } from '../store';
+import { COLORS } from '../constants/theme';
 
 import GardenScreen from '../../app/(tabs)/garden';
 import InventoryScreen from '../../app/(tabs)/inventory';
 import LabScreen from '../../app/(tabs)/lab';
 import SettingsScreen from '../../app/(tabs)/settings';
-import { COLORS } from '../constants/theme';
 
 const Tab = createBottomTabNavigator();
+
+function HarvestBadge() {
+  const readyPlants = useHarvestReadyPlants();
+  if (readyPlants.length === 0) return null;
+  return (
+    <View style={{
+      position: 'absolute',
+      top: -4,
+      right: -8,
+      width: 10,
+      height: 10,
+      borderRadius: 10,
+      backgroundColor: COLORS.text_accent,
+    }} />
+  );
+}
+
+function GardenIcon({ color, size }: { color: string; size: number }) {
+  return (
+    <View style={{ position: 'relative' }}>
+      <Leaf color={color} size={size} />
+      <HarvestBadge />
+    </View>
+  );
+}
 
 export function AppNavigator() {
   return (
@@ -30,26 +57,10 @@ export function AppNavigator() {
           tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginTop: 2 },
         }}
       >
-        <Tab.Screen
-          name="Garden"
-          component={GardenScreen}
-          options={{ tabBarIcon: ({ color, size }) => <Leaf color={color} size={size} /> }}
-        />
-        <Tab.Screen
-          name="Seeds"
-          component={InventoryScreen}
-          options={{ tabBarIcon: ({ color, size }) => <Archive color={color} size={size} /> }}
-        />
-        <Tab.Screen
-          name="Lab"
-          component={LabScreen}
-          options={{ tabBarIcon: ({ color, size }) => <FlaskConical color={color} size={size} /> }}
-        />
-        <Tab.Screen
-          name="Settings"
-          component={SettingsScreen}
-          options={{ tabBarIcon: ({ color, size }) => <Settings color={color} size={size} /> }}
-        />
+        <Tab.Screen name="Garden" component={GardenScreen} options={{ tabBarIcon: (props) => <GardenIcon color={props.color} size={props.size} /> }} />
+        <Tab.Screen name="Seeds" component={InventoryScreen} options={{ tabBarIcon: ({ color, size }) => <Archive color={color} size={size} /> }} />
+        <Tab.Screen name="Lab" component={LabScreen} options={{ tabBarIcon: ({ color, size }) => <FlaskConical color={color} size={size} /> }} />
+        <Tab.Screen name="Settings" component={SettingsScreen} options={{ tabBarIcon: ({ color, size }) => <Settings color={color} size={size} /> }} />
       </Tab.Navigator>
     </NavigationContainer>
   );

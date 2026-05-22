@@ -52,9 +52,8 @@ export default function App() {
           useInventoryActions.getState().initStartingInventory();
           useSettingsActions.getState().markInventoryInitialised();
         }
-
         autoSaveMiddleware({
-          getState: () => useAppStore.getState() as any,
+          getState: () => useAppStore.getState(),
           setState: () => {},
           subscribe: useAppStore.subscribe,
         });
@@ -66,9 +65,7 @@ export default function App() {
     bootstrap();
   }, []);
 
-  if (!ready) {
-    return <LoadingScreen />;
-  }
+  if (!ready) return <LoadingScreen />;
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: COLORS.bg_deep }}>

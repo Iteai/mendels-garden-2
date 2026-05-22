@@ -1,15 +1,5 @@
-// ─────────────────────────────────────────────
-// src/components/ui/TouchableOpacityRow.tsx
-// Touchable row item with press state feedback
-// ─────────────────────────────────────────────
-
 import React from 'react';
-import {
-  TouchableOpacity,
-  View,
-  StyleSheet,
-  TouchableOpacityProps,
-} from 'react-native';
+import { TouchableOpacity, View, StyleSheet, TouchableOpacityProps } from 'react-native';
 import { COLORS, RADIUS, SPACING } from '../../constants/theme';
 
 type TouchableOpacityRowProps = TouchableOpacityProps & {
@@ -18,20 +8,11 @@ type TouchableOpacityRowProps = TouchableOpacityProps & {
   rightSlot?: React.ReactNode;
 };
 
-export function TouchableOpacityRow({
-  children,
-  leftSlot,
-  rightSlot,
-  style,
-  ...props
-}: TouchableOpacityRowProps) {
+export function TouchableOpacityRow({ children, leftSlot, rightSlot, style, ...props }: TouchableOpacityRowProps) {
   return (
     <TouchableOpacity
-      style={({ pressed }) => [
-        styles.container,
-        pressed && styles.pressed,
-        typeof style === 'function' ? style({ pressed }) : style,
-      ]}
+      style={({ pressed }) => [styles.container, pressed && styles.pressed, typeof style === 'function' ? style({ pressed }) : style]}
+      activeOpacity={0.7}
       {...props}
     >
       {leftSlot && <View style={styles.leftSlot}>{leftSlot}</View>}
@@ -53,17 +34,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING['4'],
     marginBottom: SPACING['2'],
   },
-  pressed: {
-    backgroundColor: COLORS.bg_raised,
-    borderColor: COLORS.border_normal,
-  },
-  content: {
-    flex: 1,
-  },
-  leftSlot: {
-    marginRight: SPACING['3'],
-  },
-  rightSlot: {
-    marginLeft: SPACING['3'],
-  },
+  pressed: { backgroundColor: COLORS.bg_raised, borderColor: COLORS.border_normal },
+  content: { flex: 1 },
+  leftSlot: { marginRight: SPACING['3'] },
+  rightSlot: { marginLeft: SPACING['3'] },
 });
