@@ -2,7 +2,7 @@
   "expo": {
     "name": "Plant Genetics",
     "slug": "plant-genetics",
-    "version": "1.0.0", 
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -12,7 +12,8 @@
       "backgroundColor": "#141A0E"
     },
     "assetBundlePatterns": [
-      "**/*"
+      "**/*",
+      "node_modules/@expo/vector-icons/fonts/*.ttf"
     ],
     "ios": {
       "supportsTablet": false,
