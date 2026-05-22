@@ -1,6 +1,6 @@
 workflows:
   android-workflow:
-    name: Android APK Build
+    name: Android ABEKappa Build
     max_build_duration: 120
     environment:
       node: 20
