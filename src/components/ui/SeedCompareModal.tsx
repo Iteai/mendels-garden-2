@@ -7,7 +7,7 @@ import React from 'react';
 import {
   View,
   Modal,
-  Pressable,
+  TouchableOpacity,
   ScrollView,
   StyleSheet,
 } from 'react-native';
@@ -207,9 +207,9 @@ export function SeedCompareModal({ visible, seedA, seedB, onClose }: SeedCompare
         {/* Header */}
         <View style={styles.header}>
           <AppText variant="heading" color="primary">Seed Comparison</AppText>
-          <Pressable onPress={onClose} style={styles.closeBtn}>
+          <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
             <Ionicons name="close" size={22} color={COLORS.text_secondary} />
-          </Pressable>
+          </TouchableOpacity>
         </View>
 
         <ScrollView

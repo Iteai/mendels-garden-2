@@ -6,7 +6,7 @@
 import React from 'react';
 import {
   View,
-  Pressable,
+  TouchableOpacity,
   StyleSheet,
   Platform,
 } from 'react-native';
@@ -72,13 +72,11 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           };
 
           return (
-            <Pressable
+            <TouchableOpacity
               key={route.key}
               onPress={onPress}
-              style={({ pressed }) => [
-                styles.tab,
-                pressed && styles.tabPressed,
-              ]}
+              style={styles.tab}
+              activeOpacity={0.7}
               accessibilityRole="button"
               accessibilityState={{ selected: isFocused }}
               accessibilityLabel={config.label}
@@ -103,7 +101,7 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
               >
                 {config.label}
               </AppText>
-            </Pressable>
+            </TouchableOpacity>
           );
         })}
       </View>

@@ -68,7 +68,7 @@ const EmptyPlotCell = React.memo(
     }
     return (
       <TouchableOpacity
-        style={[styles.cell, styles.cellEmpty]}
+        style={styles.cellEmpty}
         onPress={() => onPress(plot.id)}
         activeOpacity={0.7}
       >
@@ -89,11 +89,10 @@ const OccupiedPlotCell = React.memo(
     return (
       <RarityPulse rarity={rarity} size={CELL_SIZE}>
         <TouchableOpacity
-          style={({ pressed }: { pressed: boolean }) => [
+          style={[
             styles.cell, styles.cellOccupied,
             harvestReady && styles.cellHarvestReady,
             isDying && styles.cellDying,
-            pressed && styles.cellPressed,
           ]}
           onPress={() => onPress(plant)}
           activeOpacity={0.7}
@@ -215,7 +214,7 @@ function SeedPickerModal({ plotId, visible, onClose }: {
       <View style={modalStyles.root}>
         <View style={modalStyles.header}>
           <AppText variant="heading" color="primary">Choose a Seed</AppText>
-          <TouchableOpacity onPress={onClose} style={modalStyles.closeBtn}>
+          <TouchableOpacity onPress={onClose} style={modalStyles.closeBtn} activeOpacity={0.7}>
             <Ionicons name="close" size={22} color={COLORS.text_secondary} />
           </TouchableOpacity>
         </View>
@@ -234,7 +233,7 @@ function SeedPickerModal({ plotId, visible, onClose }: {
             contentContainerStyle={modalStyles.list}
             renderItem={({ item: seed }) => (
               <TouchableOpacity
-                style={({ pressed }) => [modalStyles.seedRow, pressed && modalStyles.seedRowPressed]}
+                style={modalStyles.seedRow}
                 onPress={() => handlePlant(seed)}
                 activeOpacity={0.7}
               >
@@ -293,9 +292,8 @@ function PlantActionSheet({ plant, visible, onClose, onHarvestDone }: {
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <TouchableOpacity style={sheetStyles.overlay} onPress={onClose}>
-        <TouchableOpacity style={sheetStyles.sheet} onPress={(e) => e.stopPropagation()}>
-
+      <TouchableOpacity style={sheetStyles.overlay} onPress={onClose} activeOpacity={1}>
+        <View>
           {/* Handle bar */}
           <View style={sheetStyles.handle} />
 
@@ -341,10 +339,10 @@ function PlantActionSheet({ plant, visible, onClose, onHarvestDone }: {
             )}
           </View>
 
-          <TouchableOpacity style={sheetStyles.closeBtn} onPress={onClose}>
+          <TouchableOpacity style={sheetStyles.closeBtn} onPress={onClose} activeOpacity={0.7}>
             <AppText variant="label" color="muted">Close</AppText>
           </TouchableOpacity>
-        </TouchableOpacity>
+        </View>
       </TouchableOpacity>
     </Modal>
   );
@@ -369,10 +367,9 @@ function ActionBtn({ icon, label, color, onPress, disabled, highlight }: {
 }) {
   return (
     <TouchableOpacity
-      style={({ pressed }) => [
+      style={[
         sheetStyles.actionBtn,
         highlight && sheetStyles.actionBtnHighlight,
-        pressed && !disabled && { opacity: 0.65 },
         disabled && sheetStyles.actionBtnDisabled,
       ]}
       onPress={onPress}
@@ -394,7 +391,7 @@ function HarvestResultModal({ summary, visible, onClose }: {
 
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
-      <View style={resultStyles.overlay}>
+      <TouchableOpacity style={resultStyles.overlay} onPress={onClose} activeOpacity={1}>
         <View style={resultStyles.card}>
           <AppText variant="heading" color="accent" style={resultStyles.title}>
             Harvested!
@@ -426,7 +423,7 @@ function HarvestResultModal({ summary, visible, onClose }: {
             <AppText variant="label" color="accent">Continue</AppText>
           </TouchableOpacity>
         </View>
-      </View>
+      </TouchableOpacity>
     </Modal>
   );
 }
@@ -497,12 +494,11 @@ const styles = StyleSheet.create({
   grid:            { gap: SPACING['3'], alignItems: 'center' },
   gridRow:         { flexDirection: 'row', gap: SPACING['3'] },
   cell:            { width: CELL_SIZE, height: CELL_SIZE, borderRadius: RADIUS.lg, borderWidth: 1, alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' },
-  cellEmpty:       { backgroundColor: COLORS.bg_surface, borderColor: COLORS.border_subtle, gap: SPACING['1'] },
+  cellEmpty:       { width: CELL_SIZE, height: CELL_SIZE, borderRadius: RADIUS.lg, borderWidth: 1, alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden', backgroundColor: COLORS.bg_surface, borderColor: COLORS.border_subtle, gap: SPACING['1'] },
   cellLocked:      { backgroundColor: COLORS.bg_deep, borderColor: COLORS.border_subtle, opacity: 0.42, gap: SPACING['1'] },
   cellOccupied:    { backgroundColor: COLORS.bg_surface, borderColor: COLORS.green_deep, padding: 0 },
   cellHarvestReady:{ borderColor: COLORS.green_bright, backgroundColor: COLORS.bg_raised },
   cellDying:       { borderColor: COLORS.soil_mid, opacity: 0.75 },
-  cellPressed:     { opacity: 0.70 },
   cellLabel:       { fontSize: 8, letterSpacing: 1.5 },
   healthDot:       { position: 'absolute', top: SPACING['1'], right: SPACING['1'], width: 6, height: 6, borderRadius: RADIUS.full, zIndex: 2 },
   alertRow:        { position: 'absolute', bottom: SPACING['1'], flexDirection: 'row', gap: 3, alignItems: 'center', zIndex: 2 },

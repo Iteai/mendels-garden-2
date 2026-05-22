@@ -8,7 +8,7 @@ import React, { useMemo } from 'react';
 import {
   View,
   Modal,
-  Pressable,
+  TouchableOpacity,
   ScrollView,
   StyleSheet,
 } from 'react-native';
@@ -202,9 +202,9 @@ export function VarietyJournal({
               {discoveredCount} / {totalVarieties} varieties discovered
             </AppText>
           </View>
-          <Pressable onPress={onClose} style={styles.closeBtn}>
+          <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
             <Ionicons name="close" size={22} color={COLORS.text_secondary} />
-          </Pressable>
+          </TouchableOpacity>
         </View>
 
         {/* Progress bar */}

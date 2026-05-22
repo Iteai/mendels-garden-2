@@ -8,7 +8,7 @@
 // ─────────────────────────────────────────────
 
 import React, { useState, useMemo } from 'react';
-import { View, Pressable, StyleSheet, FlatList } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppText } from './AppText';
 import { Card } from './Card';
@@ -196,9 +196,10 @@ export function HarvestJournal({ defaultExpanded = false }: HarvestJournalProps)
   return (
     <Card variant="default" padded={false} style={journalStyles.card}>
       {/* Header — always visible */}
-      <Pressable
+      <TouchableOpacity
         style={journalStyles.header}
         onPress={() => setExpanded((v) => !v)}
+        activeOpacity={0.7}
       >
         <View style={journalStyles.headerLeft}>
           <Ionicons
@@ -228,7 +229,7 @@ export function HarvestJournal({ defaultExpanded = false }: HarvestJournalProps)
             color={COLORS.text_muted}
           />
         </View>
-      </Pressable>
+      </TouchableOpacity>
 
       {/* Expanded content */}
       {expanded && (

@@ -8,7 +8,7 @@ import React, { useMemo } from 'react';
 import {
   View,
   Modal,
-  Pressable,
+  TouchableOpacity,
   ScrollView,
   StyleSheet,
 } from 'react-native';
@@ -51,15 +51,15 @@ function ShopItemRow({
           </AppText>
         ) : null}
       </View>
-      <Pressable
-        style={({ pressed }) => [
+      <TouchableOpacity
+        style={[
           styles.buyBtn,
           canBuy && styles.buyBtnActive,
-          pressed && canBuy && styles.buyBtnPressed,
           !canBuy && styles.buyBtnDisabled,
         ]}
         onPress={onBuy}
         disabled={!canBuy}
+        activeOpacity={0.7}
       >
         <AppText
           variant="label"
@@ -70,7 +70,7 @@ function ShopItemRow({
         >
           {item.cost} ✦
         </AppText>
-      </Pressable>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -125,9 +125,9 @@ export function ShopModal({
               Spend spores on supplies and cultivar seeds
             </AppText>
           </View>
-          <Pressable onPress={onClose} style={styles.closeBtn}>
+          <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
             <Ionicons name="close" size={22} color={COLORS.text_secondary} />
-          </Pressable>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.currencyBar}>

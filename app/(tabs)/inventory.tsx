@@ -93,7 +93,7 @@ function SeedCard({ seed, onPress }: { seed: SeedItem; onPress: () => void }) {
   const ph = seed.phenotype;
   return (
     <TouchableOpacity
-      style={({ pressed }) => [styles.seedCard, pressed && styles.seedCardPressed]}
+      style={styles.seedCard}
       onPress={onPress}
       activeOpacity={0.7}
     >
@@ -317,6 +317,7 @@ function FamilyFilter({ selected, onChange }: {
             (selected === null && f === 'all') || selected === f ? filterStyles.chipActive : null,
           ]}
           onPress={() => onChange(f === 'all' ? null : f)}
+          activeOpacity={0.7}
         >
           <AppText
             variant="label"
@@ -429,9 +430,7 @@ export default function InventoryScreen() {
               data={seedList}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
-                <TouchableOpacity onPress={() => setSelectedSeed(item)} activeOpacity={0.7}>
-                  <SeedCard seed={item} />
-                </TouchableOpacity>
+                <SeedCard seed={item} onPress={() => setSelectedSeed(item)} />
               )}
               scrollEnabled={false}
               ItemSeparatorComponent={() => <View style={{ height: SPACING['2'] }} />}

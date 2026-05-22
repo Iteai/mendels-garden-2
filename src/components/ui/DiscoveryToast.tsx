@@ -8,7 +8,7 @@ import {
   Animated,
   View,
   StyleSheet,
-  Pressable,
+  TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppText } from './AppText';
@@ -116,7 +116,7 @@ export function DiscoveryToast({ data, onDismiss, autoHideMs = 3500 }: Discovery
         { opacity, transform: [{ scale }] },
       ]}
     >
-      <Pressable style={styles.content} onPress={handleDismiss}>
+      <TouchableOpacity style={styles.content} onPress={handleDismiss} activeOpacity={0.7}>
         {/* Left accent */}
         <View style={styles.accent} />
 
@@ -149,7 +149,7 @@ export function DiscoveryToast({ data, onDismiss, autoHideMs = 3500 }: Discovery
 
         {/* Close hint */}
         <Ionicons name="chevron-forward" size={14} color={COLORS.text_muted} />
-      </Pressable>
+      </TouchableOpacity>
     </Animated.View>
   );
 }

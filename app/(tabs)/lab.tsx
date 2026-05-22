@@ -75,7 +75,7 @@ function SeedPickerModal({ visible, title, excludeId, onSelect, onClose }: {
       <View style={pickerStyles.root}>
         <View style={pickerStyles.header}>
           <AppText variant="heading" color="primary">{title}</AppText>
-          <TouchableOpacity onPress={onClose} style={pickerStyles.closeBtn}>
+          <TouchableOpacity onPress={onClose} style={pickerStyles.closeBtn} activeOpacity={0.7}>
             <Ionicons name="close" size={22} color={COLORS.text_secondary} />
           </TouchableOpacity>
         </View>
@@ -98,8 +98,9 @@ function SeedPickerModal({ visible, title, excludeId, onSelect, onClose }: {
                 {seeds.map((seed) => (
                   <TouchableOpacity
                     key={seed.id}
-                    style={({ pressed }) => [pickerStyles.row, pressed && pickerStyles.rowPressed]}
+                    style={pickerStyles.row}
                     onPress={() => { onSelect(seed); onClose(); }}
+                    activeOpacity={0.7}
                   >
                     <View style={[pickerStyles.stripe, { backgroundColor: rarityColor(seed.rarity) }]} />
                     <View style={pickerStyles.preview}>
@@ -138,8 +139,9 @@ function ParentSlot({ label, seed, onPress, onClear }: {
     <View style={slotStyles.wrapper}>
       <AppText variant="label" color="muted" style={slotStyles.label}>{label}</AppText>
       <TouchableOpacity
-        style={({ pressed }) => [slotStyles.slot, seed ? slotStyles.filled : slotStyles.empty, pressed && { opacity: 0.7 }]}
+        style={[slotStyles.slot, seed ? slotStyles.filled : slotStyles.empty]}
         onPress={onPress}
+        activeOpacity={0.7}
       >
         {seed ? (
           <View style={slotStyles.filledContent}>
@@ -157,7 +159,7 @@ function ParentSlot({ label, seed, onPress, onClear }: {
         )}
       </TouchableOpacity>
       {seed && onClear && (
-        <TouchableOpacity style={slotStyles.clearBtn} onPress={onClear}>
+        <TouchableOpacity style={slotStyles.clearBtn} onPress={onClear} activeOpacity={0.7}>
           <Ionicons name="close-circle" size={18} color={COLORS.text_muted} />
         </TouchableOpacity>
       )}
@@ -223,7 +225,7 @@ function BreedResultModal({ visible, seeds, mutations, crossFamily, onClose }: {
 }) {
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
-      <View style={resultStyles.overlay}>
+      <TouchableOpacity style={resultStyles.overlay} onPress={onClose} activeOpacity={1}>
         <View style={resultStyles.sheet}>
           <View style={resultStyles.header}>
             <AppText variant="heading" color="accent">
@@ -257,11 +259,11 @@ function BreedResultModal({ visible, seeds, mutations, crossFamily, onClose }: {
             </View>
           ))}
 
-          <TouchableOpacity style={resultStyles.btn} onPress={onClose}>
+          <TouchableOpacity style={resultStyles.btn} onPress={onClose} activeOpacity={0.7}>
             <AppText variant="label" color="accent">Done</AppText>
           </TouchableOpacity>
         </View>
-      </View>
+      </TouchableOpacity>
     </Modal>
   );
 }
@@ -288,10 +290,7 @@ function HowItWorks() {
   );
 }
 
-// ─── Main Screen ──────────────────────────────
-
 // ─── Compare Modal ───────────────────────────
-// Phase 7: side-by-side trait comparison of selected parents
 
 function CompareModal({ parentA, parentB, visible, onClose }: {
   parentA: SeedItem; parentB: SeedItem;
@@ -302,7 +301,7 @@ function CompareModal({ parentA, parentB, visible, onClose }: {
       <View style={compareStyles.root}>
         <View style={compareStyles.header}>
           <AppText variant="heading" color="primary">Seed Comparison</AppText>
-          <TouchableOpacity onPress={onClose} style={compareStyles.closeBtn}>
+          <TouchableOpacity onPress={onClose} style={compareStyles.closeBtn} activeOpacity={0.7}>
             <Ionicons name="close" size={22} color={COLORS.text_secondary} />
           </TouchableOpacity>
         </View>
@@ -408,14 +407,14 @@ export default function LabScreen() {
         )}
 
         <TouchableOpacity
-          style={({ pressed }) => [
+          style={[
             styles.breedBtn,
             canBreed && styles.breedBtnActive,
             crossFam && styles.breedBtnHybrid,
-            pressed && canBreed && { opacity: 0.75 },
           ]}
           onPress={handleBreed}
           disabled={!canBreed || isBreeding}
+          activeOpacity={0.7}
         >
           <Ionicons name="git-merge-outline" size={18}
             color={canBreed ? (crossFam ? COLORS.rarity_legendary : COLORS.text_accent) : COLORS.text_muted} />
@@ -431,11 +430,9 @@ export default function LabScreen() {
         {/* Phase 7: Compare button */}
         {canBreed && (
           <TouchableOpacity
-            style={({ pressed }) => [
-              styles.compareBtn,
-              pressed && { opacity: 0.7 },
-            ]}
+            style={styles.compareBtn}
             onPress={() => setShowCompare(true)}
+            activeOpacity={0.7}
           >
             <Ionicons name="git-compare-outline" size={16} color={COLORS.rarity_rare} />
             <AppText variant="caption" style={{ color: COLORS.rarity_rare }}>

@@ -8,7 +8,7 @@ import React from 'react';
 import {
   View,
   Modal,
-  Pressable,
+  TouchableOpacity,
   StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -92,15 +92,13 @@ export function HarvestResultModal({
           </AppText>
 
           {/* Close button */}
-          <Pressable
-            style={({ pressed }) => [
-              styles.doneBtn,
-              pressed && styles.doneBtnPressed,
-            ]}
+          <TouchableOpacity
+            style={styles.doneBtn}
             onPress={onClose}
+            activeOpacity={0.7}
           >
             <AppText variant="label" color="accent">Continue</AppText>
-          </Pressable>
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>

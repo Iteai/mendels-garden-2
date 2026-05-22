@@ -4,9 +4,9 @@
 // ─────────────────────────────────────────────
 
 import React from 'react';
-import { View, Switch, StyleSheet } from 'react-native';
+import { View, Switch, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ScreenShell, AppText, Card, TouchableOpacityRow } from '../../src/components/ui';
+import { ScreenShell, AppText, Card, PressableRow } from '../../src/components/ui';
 import {
   useAppStore,
   useSettingsActions,
@@ -53,23 +53,19 @@ function SpeedSelector() {
   return (
     <View style={styles.speedRow}>
       {SPEED_OPTIONS.map((opt) => (
-        <View
+        <TouchableOpacity
           key={opt}
-          style={[
-            styles.speedBtn,
-            speed === opt && styles.speedBtnActive,
-          ]}
+          style={[styles.speedBtn, speed === opt && styles.speedBtnActive]}
+          onPress={() => setSimulationSpeed(opt)}
+          activeOpacity={0.7}
         >
           <AppText
             variant="label"
-            style={{
-              color: speed === opt ? COLORS.text_accent : COLORS.text_muted,
-            }}
-            onPress={() => setSimulationSpeed(opt)}
+            style={{ color: speed === opt ? COLORS.text_accent : COLORS.text_muted }}
           >
             {opt}×
           </AppText>
-        </View>
+        </TouchableOpacity>
       ))}
     </View>
   );
