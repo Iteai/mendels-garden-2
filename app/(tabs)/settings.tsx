@@ -6,7 +6,7 @@
 import React from 'react';
 import { View, Switch, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ScreenShell, AppText, Card, PressableRow } from '../../src/components/ui';
+import { ScreenShell, AppText, Card } from '../../src/components/ui';
 import {
   useAppStore,
   useSettingsActions,
