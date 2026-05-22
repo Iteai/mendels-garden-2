@@ -10,7 +10,6 @@ import {
   Text,
   StyleSheet,
   ActivityIndicator,
-  Platform,
 } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
