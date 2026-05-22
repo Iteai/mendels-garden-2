@@ -8,6 +8,9 @@ workflows:
       java: 17
 
     scripts:
+      - name: Clean previous Android build
+        script: rm -rf android
+
       - name: Install dependencies
         script: npm install --legacy-peer-deps
 
@@ -19,25 +22,11 @@ workflows:
           curl -L -o assets/adaptive-icon.png "https://dummyimage.com/1024x1024/1a2e1a/81c784.png"
           curl -L -o assets/favicon.png "https://dummyimage.com/192x192/1a2e1a/81c784.png"
 
-      - name: Expo Prebuild
+      - name: Expo Prebuild (clean)
         script: npx expo prebuild --platform android --clean
 
-      - name: Debug Kotlin config
-        script: |
-          echo "=== build.gradle ==="
-          cat android/build.gradle
-          echo "=== gradle.properties ==="
-          cat android/gradle.properties || true
-          echo "=== libs.versions.toml ==="
-          cat android/gradle/libs.versions.toml || true
-          echo "=== search 1.9.24 ==="
-          grep -R "1.9.24" android || true
-          echo "=== search 1.9.25 ==="
-          grep -R "1.9.25" android || true
-
       - name: Set Android SDK location
-        script: |
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+        script: echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
 
       - name: Build Android Release APK
         script: |
