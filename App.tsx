@@ -17,6 +17,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import * as Font from 'expo-font';
 
 import GardenScreen from './app/(tabs)/garden';
 import InventoryScreen from './app/(tabs)/inventory';
@@ -34,6 +35,7 @@ import {
 } from './src/store';
 import { loadGameState, autoSaveMiddleware } from './src/store/persistence';
 import type { SimulationEvent } from './src/simulation';
+import type { GardenPlot, PlantInstance, SeedItem, HarvestItem } from './src/types';
 
 const Tab = createBottomTabNavigator();
 
@@ -179,20 +181,29 @@ function TabIcon({ routeName, focused, color }: {
 // ─── Main App ─────────────────────────────────
 
 export default function App() {
+  const [fontsLoaded, setFontsLoaded] = useState(false);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     async function bootstrap() {
       try {
+        // Preload Ionicons font
+        await Font.loadAsync(Ionicons.font).catch(() => {});
+        setFontsLoaded(true);
+      } catch {
+        setFontsLoaded(true); // proceed even if font fails
+      }
+
+      try {
         const savedState = await loadGameState();
 
         if (savedState) {
           useAppStore.setState({
-            plots:       savedState.garden.plots,
-            plants:      savedState.garden.plants,
+            plots:       savedState.garden.plots as Record<string, GardenPlot>,
+            plants:      savedState.garden.plants as Record<string, PlantInstance>,
             lastSimulatedAt: savedState.garden.lastSimulatedAt,
-            seeds:       savedState.inventory.seeds,
-            harvests:    savedState.inventory.harvests,
+            seeds:       savedState.inventory.seeds as Record<string, SeedItem>,
+            harvests:    savedState.inventory.harvests as Record<string, HarvestItem>,
             currency:    savedState.inventory.currency,
             simulationSpeed:      savedState.settings.simulationSpeed,
             notificationsEnabled: savedState.settings.notificationsEnabled,
@@ -217,7 +228,7 @@ export default function App() {
     bootstrap();
   }, []);
 
-  if (!ready) {
+  if (!fontsLoaded || !ready) {
     return <LoadingScreen />;
   }
 
