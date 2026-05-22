@@ -1,42 +1,80 @@
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { AppNavigator } from './src/navigation/AppNavigator';
+import { COLORS } from './src/constants/theme';
+import { useAppStore, useGardenActions, useInventoryActions, useSettingsActions } from './src/store';
+import { loadGameState, autoSaveMiddleware } from './src/store/persistence';
 
-const Tab = createBottomTabNavigator();
-
-function GardenScreen() {
+function LoadingScreen() {
   return (
-    <View style={styles.center}>
-      <Text style={styles.text}>✅ Garden</Text>
+    <View style={loadingStyles.root}>
+      <Text style={loadingStyles.icon}>🌱</Text>
+      <Text style={loadingStyles.title}>Plant Genetics</Text>
+      <ActivityIndicator size="small" color={COLORS.green_bright} />
+      <Text style={loadingStyles.sub}>Loading your garden...</Text>
     </View>
   );
 }
-function SeedsScreen() { return <View style={styles.center}><Text style={styles.text}>✅ Seeds</Text></View>; }
-function LabScreen() { return <View style={styles.center}><Text style={styles.text}>✅ Lab</Text></View>; }
-function SettingsScreen() { return <View style={styles.center}><Text style={styles.text}>✅ Settings</Text></View>; }
 
-const styles = StyleSheet.create({
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#141A0E' },
-  text: { color: '#7DC42A', fontSize: 24 },
+const loadingStyles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: COLORS.bg_deep, alignItems: 'center', justifyContent: 'center', gap: 16 },
+  icon: { fontSize: 48 },
+  title: { fontSize: 24, fontWeight: 'bold', color: COLORS.text_accent, letterSpacing: 2 },
+  sub: { fontSize: 12, color: COLORS.text_muted },
 });
 
 export default function App() {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    async function bootstrap() {
+      try {
+        const savedState = await loadGameState();
+        if (savedState) {
+          useAppStore.setState({
+            plots: savedState.garden.plots,
+            plants: savedState.garden.plants,
+            lastSimulatedAt: savedState.garden.lastSimulatedAt,
+            seeds: savedState.inventory.seeds,
+            harvests: savedState.inventory.harvests,
+            currency: savedState.inventory.currency,
+            simulationSpeed: savedState.settings.simulationSpeed,
+            notificationsEnabled: savedState.settings.notificationsEnabled,
+            soundEnabled: savedState.settings.soundEnabled,
+            tutorialComplete: savedState.settings.tutorialComplete,
+            inventoryInitialised: savedState.settings.inventoryInitialised,
+          });
+        } else {
+          useGardenActions.getState().initGarden();
+          useInventoryActions.getState().initStartingInventory();
+          useSettingsActions.getState().markInventoryInitialised();
+        }
+
+        autoSaveMiddleware({
+          getState: () => useAppStore.getState() as any,
+          setState: () => {},
+          subscribe: useAppStore.subscribe,
+        });
+      } catch (error) {
+        console.warn('Bootstrap error:', error);
+      }
+      setReady(true);
+    }
+    bootstrap();
+  }, []);
+
+  if (!ready) {
+    return <LoadingScreen />;
+  }
+
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: COLORS.bg_deep }}>
       <SafeAreaProvider>
-        <StatusBar style="light" />
-        <NavigationContainer>
-          <Tab.Navigator screenOptions={{ headerShown: false }}>
-            <Tab.Screen name="Garden" component={GardenScreen} />
-            <Tab.Screen name="Seeds" component={SeedsScreen} />
-            <Tab.Screen name="Lab" component={LabScreen} />
-            <Tab.Screen name="Settings" component={SettingsScreen} />
-          </Tab.Navigator>
-        </NavigationContainer>
+        <StatusBar style="light" backgroundColor={COLORS.bg_deep} />
+        <AppNavigator />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
