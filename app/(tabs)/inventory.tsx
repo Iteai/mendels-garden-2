@@ -25,10 +25,11 @@ import type { SeedItem, HarvestItem } from '../../src/types';
 // ─── Helpers ──────────────────────────────────
 
 function speciesLabel(id: string): string {
-  const map: Record<string, string> = {
-    tomato: 'Tomato', chili: 'Chili', basil: 'Basil', radish: 'Radish',
-  };
-  return map[id] ?? id;
+  try {
+    return getSpecies(id as any).displayName;
+  } catch {
+    return id.replace(/_/g, ' ');
+  }
 }
 
 function rarityBorderColor(rarity: SeedItem['rarity']): string {
