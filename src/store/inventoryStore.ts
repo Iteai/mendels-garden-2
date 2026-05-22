@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────
 // src/store/inventoryStore.ts
 // Inventory state: seeds, harvests, currency
+// FIX: initStartingInventory with fallback manuale
 // ─────────────────────────────────────────────
 
 import { StateCreator } from 'zustand';
@@ -40,9 +41,7 @@ export type InventoryActions = {
   removeHarvest: (harvestId: string) => void;
   addCurrency: (amount: number) => void;
   spendCurrency: (amount: number) => boolean;
-  /** Add a batch of seeds in one store write — avoids N individual writes */
   addSeedBatch: (seeds: Array<Omit<SeedItem, 'id' | 'obtainedAt'>>) => string[];
-  /** Populate the starting inventory on first launch */
   initStartingInventory: () => void;
 };
 
@@ -66,8 +65,6 @@ export const createInventorySlice: StateCreator<
 > = (set, get) => ({
   ...initialInventoryState,
 
-  // ── Single seed add ───────────────────────
-
   addSeed: (seedData) => {
     const id = generateSeedId();
     const seed: SeedItem = {
@@ -80,13 +77,10 @@ export const createInventorySlice: StateCreator<
     return id;
   },
 
-  // ── Batch seed add (single write) ─────────
-
   addSeedBatch: (seedDataArray) => {
     const now = Date.now();
     const newSeeds: Record<string, SeedItem> = {};
     const ids: string[] = [];
-
     for (const seedData of seedDataArray) {
       const id = generateSeedId();
       ids.push(id);
@@ -97,24 +91,19 @@ export const createInventorySlice: StateCreator<
         obtainedAt: now,
       };
     }
-
     set((state) => ({ seeds: { ...state.seeds, ...newSeeds } }));
     return ids;
   },
-
-  // ── Remove seed ───────────────────────────
 
   removeSeed: (seedId, quantity = 1) => {
     set((state) => {
       const seed = state.seeds[seedId];
       if (!seed) return state;
-
       if (seed.quantity <= quantity) {
         const updated = { ...state.seeds };
         delete updated[seedId];
         return { seeds: updated };
       }
-
       return {
         seeds: {
           ...state.seeds,
@@ -123,8 +112,6 @@ export const createInventorySlice: StateCreator<
       };
     });
   },
-
-  // ── Harvests ──────────────────────────────
 
   addHarvest: (harvestData) => {
     const id = generateHarvestId();
@@ -141,8 +128,6 @@ export const createInventorySlice: StateCreator<
     });
   },
 
-  // ── Currency ──────────────────────────────
-
   addCurrency: (amount) => {
     set((state) => ({ currency: state.currency + amount }));
   },
@@ -154,14 +139,48 @@ export const createInventorySlice: StateCreator<
     return true;
   },
 
-  // ── First-launch inventory ─────────────────
-  // Called once on first app open.
-  // Uses a lazy import to avoid circular dependency with the genetics module.
-
   initStartingInventory: () => {
-    // Lazy import avoids circular dep at module eval time
-    const { generateStarterSeeds } = require('../genetics/hybridiser');
-    const starters: Array<Omit<SeedItem, 'id' | 'obtainedAt'>> = generateStarterSeeds();
-    get().addSeedBatch(starters);
+    try {
+      // Prova a usare il modulo genetics
+      const { generateStarterSeeds } = require('../genetics/hybridiser');
+      const starters = generateStarterSeeds();
+      if (starters && starters.length) {
+        get().addSeedBatch(starters);
+        return;
+      }
+    } catch (error) {
+      console.warn('generateStarterSeeds fallito, uso fallback manuale:', error);
+    }
+    // Fallback manuale: semi base
+    const fallbackSeeds: Array<Omit<SeedItem, 'id' | 'obtainedAt'>> = [
+      createBaseSeed('tomato_cherry', 5),
+      createBaseSeed('chili_cayenne', 3),
+      createBaseSeed('basil_sweet', 3),
+      createBaseSeed('radish_cherry_belle', 3),
+    ];
+    get().addSeedBatch(fallbackSeeds);
   },
 });
+
+// Helper per il fallback
+function createBaseSeed(speciesId: string, quantity: number): Omit<SeedItem, 'id' | 'obtainedAt'> {
+  return {
+    speciesId,
+    genotype: { genes: {} },
+    phenotype: {
+      rarityScore: 0.2,
+      growthRate: 0.5,
+      fruitSize: 0.5,
+      yieldMultiplier: 1.0,
+      fruitCount: 1,
+      heightFactor: 0.5,
+      waterEfficiency: 0.5,
+      primaryColorShift: 0,
+    },
+    rarity: 'common',
+    quantity,
+    parentIds: [null, null],
+    generation: 0,
+    isHybrid: false,
+  };
+}
