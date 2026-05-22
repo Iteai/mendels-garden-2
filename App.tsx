@@ -4,8 +4,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AppNavigator } from './src/navigation/AppNavigator';
-import { COLORS, GAME } from './src/constants/theme';
-import { useAppStore, useGardenActions, useInventoryActions, useSettingsActions } from './src/store';
+import { COLORS } from './src/constants/theme';
+import { useAppStore } from './src/store';
 import { loadGameState, autoSaveMiddleware } from './src/store/persistence';
 
 function LoadingScreen() {
@@ -31,9 +31,10 @@ export default function App() {
 
   useEffect(() => {
     async function bootstrap() {
+      const store = useAppStore.getState();
       try {
         const savedState = await loadGameState();
-        if (savedState && Object.keys(savedState.garden.plots).length > 0) {
+        if (savedState && savedState.garden && Object.keys(savedState.garden?.plots ?? {}).length > 0) {
           useAppStore.setState({
             plots: savedState.garden.plots,
             plants: savedState.garden.plants,
@@ -48,28 +49,16 @@ export default function App() {
             inventoryInitialised: savedState.settings.inventoryInitialised,
           });
         } else {
-          console.log('🟢 Inizializzazione forzata: creazione vasi e semi');
-          useGardenActions.getState().initGarden();
-          const success = useInventoryActions.getState().initStartingInventory();
-          if (!success) {
-            // Fallback: aggiunge semi base manualmente
-            const now = Date.now();
-            const fallbackSeeds = [
-              { speciesId: 'tomato', genotype: { genes: {} }, phenotype: { rarityScore: 0.2, growthRate: 0.5, fruitSize: 0.5, yieldMultiplier: 1.0 }, rarity: 'common', quantity: 3, parentIds: [null, null], generation: 0, isHybrid: false, obtainedAt: now },
-              { speciesId: 'basil', genotype: { genes: {} }, phenotype: { rarityScore: 0.2, growthRate: 0.5, fruitSize: 0.5, yieldMultiplier: 1.0 }, rarity: 'common', quantity: 2, parentIds: [null, null], generation: 0, isHybrid: false, obtainedAt: now },
-            ];
-            fallbackSeeds.forEach(seedData => {
-              const id = `seed_${seedData.speciesId}_${Date.now()}_${Math.random()}`;
-              useAppStore.setState(state => ({ seeds: { ...state.seeds, [id]: { ...seedData, id } } }));
-            });
-          }
-          useSettingsActions.getState().markInventoryInitialised();
+          // Fresh start — init garden and inventory directly via store
+          store.initGarden();
+          store.initStartingInventory();
+          store.markInventoryInitialised();
         }
         autoSaveMiddleware({ getState: () => useAppStore.getState(), setState: () => {}, subscribe: useAppStore.subscribe });
       } catch (error) {
         console.warn('Bootstrap error, forcing fresh state:', error);
-        useGardenActions.getState().initGarden();
-        useSettingsActions.getState().markInventoryInitialised();
+        store.initGarden();
+        store.markInventoryInitialised();
       }
       setReady(true);
     }
