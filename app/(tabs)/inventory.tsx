@@ -8,7 +8,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   StyleSheet,
-  Pressable,
+  TouchableOpacity,
   FlatList,
   Modal,
   ScrollView,
@@ -70,17 +70,18 @@ function TabToggle({
   return (
     <View style={styles.toggle}>
       {(['seeds', 'harvests'] as InventoryTab[]).map((tab) => (
-        <Pressable
+        <TouchableOpacity
           key={tab}
           style={[styles.toggleBtn, active === tab && styles.toggleBtnActive]}
           onPress={() => onChange(tab)}
+          activeOpacity={0.7}
         >
           <AppText variant="label" style={{
             color: active === tab ? COLORS.text_accent : COLORS.text_muted,
           }}>
             {tab === 'seeds' ? `Seeds · ${seedCount}` : `Harvests · ${harvestCount}`}
           </AppText>
-        </Pressable>
+        </TouchableOpacity>
       ))}
     </View>
   );
@@ -91,9 +92,10 @@ function TabToggle({
 function SeedCard({ seed, onPress }: { seed: SeedItem; onPress: () => void }) {
   const ph = seed.phenotype;
   return (
-    <Pressable
+    <TouchableOpacity
       style={({ pressed }) => [styles.seedCard, pressed && styles.seedCardPressed]}
       onPress={onPress}
+      activeOpacity={0.7}
     >
       <View style={styles.seedLeft}>
         <View style={[styles.seedIcon, { borderColor: rarityBorderColor(seed.rarity) }]}>
@@ -129,7 +131,7 @@ function SeedCard({ seed, onPress }: { seed: SeedItem; onPress: () => void }) {
         })}
       </View>
       <Ionicons name="chevron-forward" size={14} color={COLORS.text_muted} />
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
@@ -154,9 +156,9 @@ function SeedDetailModal({ seed, onClose }: { seed: SeedItem; onClose: () => voi
               Gen {seed.generation} · ×{seed.quantity} · {formatAgo(seed.obtainedAt)}
             </AppText>
           </View>
-          <Pressable onPress={onClose} style={detailStyles.closeBtn}>
+          <TouchableOpacity onPress={onClose} style={detailStyles.closeBtn} activeOpacity={0.7}>
             <Ionicons name="close" size={22} color={COLORS.text_secondary} />
-          </Pressable>
+          </TouchableOpacity>
         </View>
 
         <ScrollView
@@ -308,7 +310,7 @@ function FamilyFilter({ selected, onChange }: {
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={filterStyles.scroll}>
       {families.map((f) => (
-        <Pressable
+        <TouchableOpacity
           key={f}
           style={[
             filterStyles.chip,
@@ -326,7 +328,7 @@ function FamilyFilter({ selected, onChange }: {
           >
             {f.toUpperCase()}
           </AppText>
-        </Pressable>
+        </TouchableOpacity>
       ))}
     </ScrollView>
   );
@@ -409,9 +411,9 @@ export default function InventoryScreen() {
               onChangeText={setSearchQuery}
             />
             {searchQuery.length > 0 && (
-              <Pressable onPress={() => setSearchQuery('')}>
+              <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
                 <Ionicons name="close-circle" size={14} color={COLORS.text_muted} />
-              </Pressable>
+              </TouchableOpacity>
             )}
           </View>
           <FamilyFilter selected={familyFilter} onChange={setFamilyFilter} />
@@ -427,7 +429,9 @@ export default function InventoryScreen() {
               data={seedList}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
-                <SeedCard seed={item} onPress={() => setSelectedSeed(item)} />
+                <TouchableOpacity onPress={() => setSelectedSeed(item)} activeOpacity={0.7}>
+                  <SeedCard seed={item} />
+                </TouchableOpacity>
               )}
               scrollEnabled={false}
               ItemSeparatorComponent={() => <View style={{ height: SPACING['2'] }} />}

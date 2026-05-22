@@ -12,7 +12,7 @@
 
 import React, { useCallback, useState, useMemo } from 'react';
 import {
-  View, Pressable, StyleSheet,
+  View, TouchableOpacity, StyleSheet,
   Modal, ScrollView, FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -67,13 +67,14 @@ const EmptyPlotCell = React.memo(
       );
     }
     return (
-      <Pressable
-        style={({ pressed }: { pressed: boolean }) => [styles.cell, styles.cellEmpty, pressed && styles.cellPressed]}
+      <TouchableOpacity
+        style={[styles.cell, styles.cellEmpty]}
         onPress={() => onPress(plot.id)}
+        activeOpacity={0.7}
       >
         <Ionicons name="add-circle-outline" size={22} color={COLORS.green_muted} />
         <AppText variant="label" color="muted" style={styles.cellLabel}>plant</AppText>
-      </Pressable>
+      </TouchableOpacity>
     );
   },
 );
@@ -87,7 +88,7 @@ const OccupiedPlotCell = React.memo(
 
     return (
       <RarityPulse rarity={rarity} size={CELL_SIZE}>
-        <Pressable
+        <TouchableOpacity
           style={({ pressed }: { pressed: boolean }) => [
             styles.cell, styles.cellOccupied,
             harvestReady && styles.cellHarvestReady,
@@ -95,6 +96,7 @@ const OccupiedPlotCell = React.memo(
             pressed && styles.cellPressed,
           ]}
           onPress={() => onPress(plant)}
+          activeOpacity={0.7}
         >
           {/* Phase 9: Stage transition flash — plays on every growthStage change */}
           <StageTransitionFlash stage={plant.growthStage} />
@@ -111,7 +113,7 @@ const OccupiedPlotCell = React.memo(
               </AppText>
             )}
           </View>
-        </Pressable>
+        </TouchableOpacity>
       </RarityPulse>
     );
   },
@@ -213,9 +215,9 @@ function SeedPickerModal({ plotId, visible, onClose }: {
       <View style={modalStyles.root}>
         <View style={modalStyles.header}>
           <AppText variant="heading" color="primary">Choose a Seed</AppText>
-          <Pressable onPress={onClose} style={modalStyles.closeBtn}>
+          <TouchableOpacity onPress={onClose} style={modalStyles.closeBtn}>
             <Ionicons name="close" size={22} color={COLORS.text_secondary} />
-          </Pressable>
+          </TouchableOpacity>
         </View>
 
         {seedList.length === 0 ? (
@@ -231,9 +233,10 @@ function SeedPickerModal({ plotId, visible, onClose }: {
             keyExtractor={(s) => s.id}
             contentContainerStyle={modalStyles.list}
             renderItem={({ item: seed }) => (
-              <Pressable
+              <TouchableOpacity
                 style={({ pressed }) => [modalStyles.seedRow, pressed && modalStyles.seedRowPressed]}
                 onPress={() => handlePlant(seed)}
+                activeOpacity={0.7}
               >
                 {/* Mini preview */}
                 <View style={modalStyles.preview}>
@@ -251,7 +254,7 @@ function SeedPickerModal({ plotId, visible, onClose }: {
                   </AppText>
                 </View>
                 <Ionicons name="arrow-forward-circle-outline" size={22} color={COLORS.green_primary} />
-              </Pressable>
+              </TouchableOpacity>
             )}
           />
         )}
@@ -290,8 +293,8 @@ function PlantActionSheet({ plant, visible, onClose, onHarvestDone }: {
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={sheetStyles.overlay} onPress={onClose}>
-        <Pressable style={sheetStyles.sheet} onPress={(e) => e.stopPropagation()}>
+      <TouchableOpacity style={sheetStyles.overlay} onPress={onClose}>
+        <TouchableOpacity style={sheetStyles.sheet} onPress={(e) => e.stopPropagation()}>
 
           {/* Handle bar */}
           <View style={sheetStyles.handle} />
@@ -338,11 +341,11 @@ function PlantActionSheet({ plant, visible, onClose, onHarvestDone }: {
             )}
           </View>
 
-          <Pressable style={sheetStyles.closeBtn} onPress={onClose}>
+          <TouchableOpacity style={sheetStyles.closeBtn} onPress={onClose}>
             <AppText variant="label" color="muted">Close</AppText>
-          </Pressable>
-        </Pressable>
-      </Pressable>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </TouchableOpacity>
     </Modal>
   );
 }
@@ -365,7 +368,7 @@ function ActionBtn({ icon, label, color, onPress, disabled, highlight }: {
   onPress: () => void; disabled?: boolean; highlight?: boolean;
 }) {
   return (
-    <Pressable
+    <TouchableOpacity
       style={({ pressed }) => [
         sheetStyles.actionBtn,
         highlight && sheetStyles.actionBtnHighlight,
@@ -374,10 +377,11 @@ function ActionBtn({ icon, label, color, onPress, disabled, highlight }: {
       ]}
       onPress={onPress}
       disabled={disabled}
+      activeOpacity={0.7}
     >
       <Ionicons name={icon as any} size={20} color={disabled ? COLORS.text_muted : color} />
       <AppText variant="label" style={{ color: disabled ? COLORS.text_muted : color }}>{label}</AppText>
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
@@ -418,9 +422,9 @@ function HarvestResultModal({ summary, visible, onClose }: {
             <AppText variant="subheading" color="accent">+{summary.currencyEarned} ✦ Spores</AppText>
           </View>
 
-          <Pressable style={resultStyles.btn} onPress={onClose}>
+          <TouchableOpacity style={resultStyles.btn} onPress={onClose} activeOpacity={0.7}>
             <AppText variant="label" color="accent">Continue</AppText>
-          </Pressable>
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>

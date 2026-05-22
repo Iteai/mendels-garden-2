@@ -6,7 +6,7 @@
 export { AppText } from './AppText';
 export { Card } from './Card';
 export { Badge } from './Badge';
-export { PressableRow } from './PressableRow';
+export { TouchableOpacityRow } from './TouchableOpacityRow';
 export { ScreenShell } from './ScreenShell';
 export { StatBar } from './StatBar';
 export { GrowthTimer } from './GrowthTimer';

@@ -7,7 +7,7 @@
 
 import React, { useState, useCallback, useMemo } from 'react';
 import {
-  View, ScrollView, Pressable, StyleSheet,
+  View, ScrollView, TouchableOpacity, StyleSheet,
   Modal, FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -75,9 +75,9 @@ function SeedPickerModal({ visible, title, excludeId, onSelect, onClose }: {
       <View style={pickerStyles.root}>
         <View style={pickerStyles.header}>
           <AppText variant="heading" color="primary">{title}</AppText>
-          <Pressable onPress={onClose} style={pickerStyles.closeBtn}>
+          <TouchableOpacity onPress={onClose} style={pickerStyles.closeBtn}>
             <Ionicons name="close" size={22} color={COLORS.text_secondary} />
-          </Pressable>
+          </TouchableOpacity>
         </View>
         <AppText variant="caption" color="muted" style={pickerStyles.note}>
           All species can be crossed — even across families.
@@ -96,7 +96,7 @@ function SeedPickerModal({ visible, title, excludeId, onSelect, onClose }: {
                   {family.toUpperCase()} FAMILY
                 </AppText>
                 {seeds.map((seed) => (
-                  <Pressable
+                  <TouchableOpacity
                     key={seed.id}
                     style={({ pressed }) => [pickerStyles.row, pressed && pickerStyles.rowPressed]}
                     onPress={() => { onSelect(seed); onClose(); }}
@@ -117,7 +117,7 @@ function SeedPickerModal({ visible, title, excludeId, onSelect, onClose }: {
                       </AppText>
                     </View>
                     <Ionicons name="chevron-forward" size={14} color={COLORS.text_muted} />
-                  </Pressable>
+                  </TouchableOpacity>
                 ))}
               </View>
             ))}
@@ -137,7 +137,7 @@ function ParentSlot({ label, seed, onPress, onClear }: {
   return (
     <View style={slotStyles.wrapper}>
       <AppText variant="label" color="muted" style={slotStyles.label}>{label}</AppText>
-      <Pressable
+      <TouchableOpacity
         style={({ pressed }) => [slotStyles.slot, seed ? slotStyles.filled : slotStyles.empty, pressed && { opacity: 0.7 }]}
         onPress={onPress}
       >
@@ -155,11 +155,11 @@ function ParentSlot({ label, seed, onPress, onClear }: {
             <AppText variant="caption" color="muted">Any species</AppText>
           </View>
         )}
-      </Pressable>
+      </TouchableOpacity>
       {seed && onClear && (
-        <Pressable style={slotStyles.clearBtn} onPress={onClear}>
+        <TouchableOpacity style={slotStyles.clearBtn} onPress={onClear}>
           <Ionicons name="close-circle" size={18} color={COLORS.text_muted} />
-        </Pressable>
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -257,9 +257,9 @@ function BreedResultModal({ visible, seeds, mutations, crossFamily, onClose }: {
             </View>
           ))}
 
-          <Pressable style={resultStyles.btn} onPress={onClose}>
+          <TouchableOpacity style={resultStyles.btn} onPress={onClose}>
             <AppText variant="label" color="accent">Done</AppText>
-          </Pressable>
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -302,9 +302,9 @@ function CompareModal({ parentA, parentB, visible, onClose }: {
       <View style={compareStyles.root}>
         <View style={compareStyles.header}>
           <AppText variant="heading" color="primary">Seed Comparison</AppText>
-          <Pressable onPress={onClose} style={compareStyles.closeBtn}>
+          <TouchableOpacity onPress={onClose} style={compareStyles.closeBtn}>
             <Ionicons name="close" size={22} color={COLORS.text_secondary} />
-          </Pressable>
+          </TouchableOpacity>
         </View>
 
         <ScrollView contentContainerStyle={compareStyles.content}>
@@ -407,7 +407,7 @@ export default function LabScreen() {
           <CrossFamilyBanner parentA={parentA} parentB={parentB} />
         )}
 
-        <Pressable
+        <TouchableOpacity
           style={({ pressed }) => [
             styles.breedBtn,
             canBreed && styles.breedBtnActive,
@@ -426,11 +426,11 @@ export default function LabScreen() {
               ? `${crossFam ? '⚡ Hybrid Breed' : 'Breed'} · 3 offspring · ${BREED_COST} ✦`
               : 'Select two parent seeds'}
           </AppText>
-        </Pressable>
+        </TouchableOpacity>
 
         {/* Phase 7: Compare button */}
         {canBreed && (
-          <Pressable
+          <TouchableOpacity
             style={({ pressed }) => [
               styles.compareBtn,
               pressed && { opacity: 0.7 },
@@ -441,7 +441,7 @@ export default function LabScreen() {
             <AppText variant="caption" style={{ color: COLORS.rarity_rare }}>
               Compare Parents
             </AppText>
-          </Pressable>
+          </TouchableOpacity>
         )}
       </Card>
 

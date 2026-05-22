@@ -52,7 +52,7 @@ export function ScreenShell({
   );
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
+    <View style={[styles.root, { paddingTop: insets.top + 20}]}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>

@@ -1,14 +1,9 @@
-// ─────────────────────────────────────────────
-// app/(tabs)/_layout.tsx
-// Tab navigator + foreground simulation loop
-// ─────────────────────────────────────────────
-
 import React, { useEffect, useRef, useCallback } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Tabs } from 'expo-router';
-import { TabBar } from '../../src/components/ui/TabBar';
+import { Ionicons } from '@expo/vector-icons';
 import { useGardenActions, useAppStore, useHarvestReadyPlants } from '../../src/store';
-import { GAME } from '../../src/constants/theme';
+import { GAME, COLORS } from '../../src/constants/theme';
 import type { SimulationEvent } from '../../src/simulation';
 
 // ─── Simulation Loop ──────────────────────────
@@ -23,18 +18,12 @@ function SimulationLoop() {
   const runTick = useCallback(() => {
     const events: SimulationEvent[] = tickSimulation(speedRef.current);
     setLastSimulatedAt(Date.now());
-
-    // Solo log in sviluppo
-    if (__DEV__ && events.length > 0) {
-      console.log(`[Sim] ${events.length} events`);
-    }
+    if (__DEV__ && events.length > 0) console.log(`[Sim] ${events.length} events`);
   }, [tickSimulation, setLastSimulatedAt]);
 
   useEffect(() => {
     intervalRef.current = setInterval(runTick, GAME.SIMULATION_INTERVAL_MS);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [runTick]);
 
   return null;
@@ -53,33 +42,80 @@ function HarvestBadge() {
 }
 
 const badge = StyleSheet.create({
-  container: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    zIndex: 10,
-  },
-  dot: {
-    width: 7,
-    height: 7,
-    borderRadius: 99,
-    backgroundColor: '#C4D97A',
-  },
+  container: { position: 'absolute', top: -2, right: -2, zIndex: 10 },
+  dot: { width: 7, height: 7, borderRadius: 99, backgroundColor: '#C4D97A' },
 });
 
-// ─── Tab Layout ───────────────────────────────
+// ─── Tab Layout con TouchableOpacity ──────────
 export default function TabLayout() {
   return (
     <>
-      {/* <SimulationLoop /> */}
+      <SimulationLoop />
       <Tabs
-        tabBar={(props) => <TabBar {...props} />}
-        screenOptions={{ headerShown: false }}
+        screenOptions={{
+          headerShown: false,
+          tabBarButton: (props) => (
+            <TouchableOpacity
+              {...props}
+              activeOpacity={0.7}
+              onPress={(e) => {
+                props.onPress?.(e);
+              }}
+              style={[props.style, { flex: 1, alignItems: 'center', justifyContent: 'center' }]}
+            />
+          ),
+          tabBarStyle: {
+            backgroundColor: COLORS.bg_deep,
+            borderTopColor: COLORS.border_normal,
+            borderTopWidth: 1,
+            height: 60,
+            paddingBottom: 8,
+            paddingTop: 8,
+          },
+          tabBarActiveTintColor: COLORS.green_bright,
+          tabBarInactiveTintColor: COLORS.text_muted,
+          tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginTop: 2 },
+        }}
       >
-        <Tabs.Screen name="garden" options={{ title: 'Garden' }} />
-        <Tabs.Screen name="inventory" options={{ title: 'Seeds' }} />
-        <Tabs.Screen name="lab" options={{ title: 'Lab' }} />
-        <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
+        <Tabs.Screen
+          name="garden"
+          options={{
+            title: 'Garden',
+            tabBarIcon: ({ focused, color }) => (
+              <View style={{ position: 'relative' }}>
+                <Ionicons name={focused ? 'leaf' : 'leaf-outline'} size={22} color={color} />
+                <HarvestBadge />
+              </View>
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="inventory"
+          options={{
+            title: 'Seeds',
+            tabBarIcon: ({ focused, color }) => (
+              <Ionicons name={focused ? 'archive' : 'archive-outline'} size={22} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="lab"
+          options={{
+            title: 'Lab',
+            tabBarIcon: ({ focused, color }) => (
+              <Ionicons name={focused ? 'flask' : 'flask-outline'} size={22} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="settings"
+          options={{
+            title: 'Settings',
+            tabBarIcon: ({ focused, color }) => (
+              <Ionicons name={focused ? 'settings' : 'settings-outline'} size={22} color={color} />
+            ),
+          }}
+        />
       </Tabs>
     </>
   );

@@ -73,7 +73,7 @@ plant-genetics/
 │       │   ├── Card.tsx         Surface card (default/raised/inset/highlight)
 │       │   ├── Badge.tsx        Rarity, health, and growth-stage pills
 │       │   ├── StatBar.tsx      Horizontal resource bar
-│       │   ├── PressableRow.tsx Touchable list row
+│       │   ├── TouchableOpacityRow.tsx Touchable list row
 │       │   ├── ScreenShell.tsx  Safe-area screen wrapper with header
 │       │   ├── GrowthTimer.tsx  Stage progress bar + lifecycle strip + time remaining
 │       │   ├── TabBar.tsx       Custom bottom tab bar
