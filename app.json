@@ -2,8 +2,7 @@
   "expo": {
     "name": "Plant Genetics",
     "slug": "plant-genetics",
-    "version": "1.0.0",
-    "entryPoint": "./index.js",
+    "version": "1.0.0", 
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
